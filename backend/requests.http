@@ -1,0 +1,29 @@
+# Тесты API портала. Нужно расширение VS Code: "REST Client" (humao.rest-client).
+# Над каждым запросом появится кнопка "Send Request" — кликайте по порядку.
+
+@base = http://localhost:8080
+
+### 0. Проверка, что сервер жив
+GET {{base}}/health
+
+### 1. Создать заявку (скопируйте "id" из ответа в @id ниже)
+# @name create
+POST {{base}}/api/v1/certificate-requests
+Content-Type: application/json
+
+{
+  "fullName": "Иванов Иван Иванович"
+}
+
+### --- подставьте id и downloadToken из ответов ---
+@id = ВСТАВЬТЕ_ID
+@downloadToken = ВСТАВЬТЕ_DOWNLOAD_TOKEN
+
+### 2. Статус заявки (через ~1 сек станет ISSUED, появится delivery.downloadToken)
+GET {{base}}/api/v1/certificate-requests/{{id}}
+
+### 3. Скачать артефакт по одноразовому токену
+GET {{base}}/api/v1/download/{{downloadToken}}
+
+### 4. (опц.) Получить пароль к .p12 — токен берётся из лога сервера (out-of-band)
+# GET {{base}}/api/v1/password/ВСТАВЬТЕ_PASSWORD_TOKEN

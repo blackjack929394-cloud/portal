@@ -1,0 +1,18 @@
+# DOMAIN задаётся из окружения (compose). Для локального теста = localhost
+# (Caddy выдаст самоподписанный сертификат через свой internal CA).
+{$DOMAIN:localhost} {
+	encode gzip
+
+	# API и аутентификация -> бэкенд
+	@backend path /api/* /auth/* /health
+	handle @backend {
+		reverse_proxy backend:8080
+	}
+
+	# Всё остальное -> собранный SPA
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
