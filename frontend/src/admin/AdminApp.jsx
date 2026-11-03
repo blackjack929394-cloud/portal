@@ -24,6 +24,7 @@ import {
   setUserBlocked,
   getStats,
 } from './adminApi.js';
+import DogmaLogo from '../components/DogmaLogo.jsx';
 
 const TABS = [
   { id: 'overview', label: 'Обзор' },
@@ -201,8 +202,7 @@ export default function AdminApp() {
       <div className="page">
         <header className="topbar">
           <div className="brand">
-            <AdminGlyph />
-            <span className="brand-mark">DOGMA</span>
+            <DogmaLogo />
             <span className="brand-tag">Администрирование</span>
           </div>
         </header>
@@ -229,11 +229,8 @@ export default function AdminApp() {
     <div className="admin">
       <aside className="admin-side">
         <div className="admin-brand">
-          <AdminGlyph />
-          <div>
-            <div className="brand-mark">DOGMA</div>
-            <div className="brand-tag">Администрирование</div>
-          </div>
+          <DogmaLogo />
+          <div className="brand-tag">Администрирование</div>
         </div>
 
         <nav className="admin-nav" aria-label="Разделы">
@@ -269,15 +266,6 @@ export default function AdminApp() {
 }
 
 // Знак продукта — тот же маршрут из двух узлов, что и в клиенте.
-function AdminGlyph() {
-  return (
-    <svg className="brand-glyph" viewBox="0 0 24 12" aria-hidden="true">
-      <path d="M2 9h6l3-3h11" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="2" cy="9" r="1.6" fill="currentColor" />
-      <circle cx="22" cy="6" r="1.6" fill="var(--gold)" />
-    </svg>
-  );
-}
 
 // ── Обзор ────────────────────────────────────────────────────────────────────
 function OverviewTab({ token, pendingCount, chatUnread, goTo }) {

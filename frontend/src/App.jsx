@@ -19,6 +19,7 @@ import {
   ApiError,
 } from './api.js';
 import QRCode from 'qrcode';
+import DogmaLogo from './components/DogmaLogo.jsx';
 
 const STEP_INDEX = { form: 0, denied: 0, issuing: 1, pending: 1, routing: 2, ready: 3, error: 1 };
 
@@ -259,8 +260,7 @@ export default function App() {
     <div className="page">
       <header className="topbar">
         <div className="brand">
-          <RouteGlyph />
-          <span className="brand-mark">DOGMA</span>
+          <DogmaLogo />
           <span className="brand-tag">{t('brandTag')}</span>
         </div>
         <div className="topbar-right">
@@ -527,18 +527,6 @@ function describeError(err, t) {
     return err.message;
   }
   return t('networkError') + apiBase;
-}
-
-// Знак продукта: маршрут из двух узлов. Тот же мотив повторяется
-// на экране входа и в шаге прогресса — это подпись DOGMA.
-function RouteGlyph() {
-  return (
-    <svg className="brand-glyph" viewBox="0 0 24 12" aria-hidden="true">
-      <path d="M2 9h6l3-3h11" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="2" cy="9" r="1.6" fill="currentColor" />
-      <circle cx="22" cy="6" r="1.6" fill="var(--gold)" />
-    </svg>
-  );
 }
 
 // RU → EU: единственный «богатый» элемент на экране входа. Не декор,
