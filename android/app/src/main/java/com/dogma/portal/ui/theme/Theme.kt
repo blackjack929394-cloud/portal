@@ -1,17 +1,71 @@
 package com.dogma.portal.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.dogma.portal.R
+
+val Inter = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+)
+
+val Mono = FontFamily(
+    Font(R.font.jetbrains_mono_medium, FontWeight.Medium),
+)
+
+val DogmaTypography = Typography(
+    titleLarge = TextStyle(
+        fontFamily = Inter,
+        fontWeight = FontWeight.Medium,
+        fontSize = 26.sp,
+        lineHeight = 31.sp,
+    ),
+    titleMedium = TextStyle(
+        fontFamily = Inter,
+        fontWeight = FontWeight.Medium,
+        fontSize = 17.sp,
+        lineHeight = 22.sp,
+    ),
+    bodyLarge = TextStyle(
+        fontFamily = Inter,
+        fontWeight = FontWeight.Normal,
+        fontSize = 15.sp,
+        lineHeight = 22.sp,
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = Inter,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+    ),
+    labelLarge = TextStyle(
+        fontFamily = Inter,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+    ),
+    labelMedium = TextStyle(
+        fontFamily = Inter,
+        fontWeight = FontWeight.Normal,
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+    ),
+)
 
 /**
- * Палитра desktop-клиента Dogma VPN:
- * чёрный сайдбар, светлый/тёмный контент, монохромный акцент.
+ * Палитра веб-портала DOGMA: тёплый тёмный фон, кремовый текст,
+ * золотой акцент. Приложение использует её как единственную тему.
  */
 data class DogmaPalette(
     val bg: Color,
@@ -38,83 +92,56 @@ data class DogmaPalette(
     val authMuted: Color,
 )
 
-val LightPalette = DogmaPalette(
-    bg = Color(0xFFF4F4F2),
-    card = Color(0xFFFFFFFF),
-    border = Color(0xFFE8E8E6),
-    fg = Color(0xFF111111),
-    muted = Color(0xFF8A8A8A),
-    accent = Color(0xFF111111),
-    accentFg = Color(0xFFFFFFFF),
-    chipBg = Color(0xFFFAFAFA),
-    track = Color(0xFFE5E5E3),
-    danger = Color(0xFFD43A3A),
-    ok = Color(0xFF111111),
-    warning = Color(0xFFE6A817),
-    sideBg = Color(0xFF0B0B0B),
-    sideFg = Color(0xFF9A9A9A),
-    sideActiveBg = Color(0xFF1E1E1E),
-    sideActiveFg = Color(0xFFFFFFFF),
-    authBg = Color(0xFF0B0B0B),
-    authCard = Color(0xFF141414),
-    authBorder = Color(0xFF242424),
-    authInput = Color(0xFF1D1D1D),
-    authFg = Color(0xFFEEEEEE),
-    authMuted = Color(0xFF8F8F8F),
+val PortalPalette = DogmaPalette(
+    bg = Color(0xFF131210),
+    card = Color(0xFF1B1917),
+    border = Color(0x17EFE9DE),
+    fg = Color(0xFFEFE9DE),
+    muted = Color(0xFFAAA398),
+    accent = Color(0xFFEFE9DE),
+    accentFg = Color(0xFF14120F),
+    chipBg = Color(0xFF131210),
+    track = Color(0xFF24211E),
+    danger = Color(0xFFD9776E),
+    ok = Color(0xFF63B184),
+    warning = Color(0xFFD8A13C),
+    sideBg = Color(0xFF131210),
+    sideFg = Color(0xFF8A847A),
+    sideActiveBg = Color(0xFF24211E),
+    sideActiveFg = Color(0xFFD8A13C),
+    authBg = Color(0xFF131210),
+    authCard = Color(0xFF1B1917),
+    authBorder = Color(0x17EFE9DE),
+    authInput = Color(0xFF131210),
+    authFg = Color(0xFFEFE9DE),
+    authMuted = Color(0xFFAAA398),
 )
 
-val DarkPalette = LightPalette.copy(
-    bg = Color(0xFF131313),
-    card = Color(0xFF1C1C1C),
-    border = Color(0xFF2A2A2A),
-    fg = Color(0xFFF2F2F2),
-    muted = Color(0xFF8F8F8F),
-    accent = Color(0xFFF2F2F2),
-    accentFg = Color(0xFF111111),
-    chipBg = Color(0xFF222222),
-    track = Color(0xFF2C2C2C),
-    ok = Color(0xFFF2F2F2),
-)
-
-val LocalPalette = staticCompositionLocalOf { LightPalette }
+val LocalPalette = staticCompositionLocalOf { PortalPalette }
 
 @Composable
 fun dogmaPalette(): DogmaPalette = LocalPalette.current
 
 @Composable
-fun DogmaTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val palette = if (dark) DarkPalette else LightPalette
-    CompositionLocalProvider(LocalPalette provides palette) {
+fun DogmaTheme(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalPalette provides PortalPalette) {
         MaterialTheme(
-            colorScheme = if (dark) {
-                darkColorScheme(
-                    primary = palette.accent,
-                    onPrimary = palette.accentFg,
-                    background = palette.bg,
-                    onBackground = palette.fg,
-                    surface = palette.card,
-                    onSurface = palette.fg,
-                    surfaceVariant = palette.chipBg,
-                    onSurfaceVariant = palette.muted,
-                    outline = palette.border,
-                    error = palette.danger,
-                    onError = Color.White,
-                )
-            } else {
-                lightColorScheme(
-                    primary = palette.accent,
-                    onPrimary = palette.accentFg,
-                    background = palette.bg,
-                    onBackground = palette.fg,
-                    surface = palette.card,
-                    onSurface = palette.fg,
-                    surfaceVariant = palette.chipBg,
-                    onSurfaceVariant = palette.muted,
-                    outline = palette.border,
-                    error = palette.danger,
-                    onError = Color.White,
-                )
-            },
+            colorScheme = darkColorScheme(
+                primary = PortalPalette.accent,
+                onPrimary = PortalPalette.accentFg,
+                secondary = PortalPalette.warning,
+                onSecondary = PortalPalette.accentFg,
+                background = PortalPalette.bg,
+                onBackground = PortalPalette.fg,
+                surface = PortalPalette.card,
+                onSurface = PortalPalette.fg,
+                surfaceVariant = PortalPalette.track,
+                onSurfaceVariant = PortalPalette.muted,
+                outline = PortalPalette.border,
+                error = PortalPalette.danger,
+                onError = Color(0xFF14120F),
+            ),
+            typography = DogmaTypography,
             content = content,
         )
     }

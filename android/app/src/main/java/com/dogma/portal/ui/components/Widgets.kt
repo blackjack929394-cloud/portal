@@ -3,15 +3,18 @@ package com.dogma.portal.ui.components
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -50,6 +53,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -59,7 +63,11 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -74,6 +82,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.dogma.portal.R
 import com.dogma.portal.data.Prefs
 import com.dogma.portal.data.ProxyNode
 import com.dogma.portal.data.SpeedPoint
@@ -90,53 +99,89 @@ import kotlin.math.roundToInt
 // ── brand ───────────────────────────────────────────────────────────────────
 
 @Composable
-fun DogmaLogo(
+fun AppMark(
+    size: Dp = 24.dp,
     modifier: Modifier = Modifier,
-    size: Dp = 64.dp,
-    circleColor: Color = Color.White,
-    markColor: Color = Color(0xFF111111),
+    tint: Color = dogmaPalette().fg,
 ) {
-    val fontSize = (size.value * 0.5f).sp
-    Box(
-        modifier = modifier
-            .size(size)
-            .background(circleColor, CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "1",
-                color = markColor,
-                fontWeight = FontWeight.Black,
-                fontSize = fontSize,
-                letterSpacing = (-2).sp,
-            )
-            Text(
-                text = "C",
-                color = markColor,
-                fontWeight = FontWeight.Black,
-                fontSize = fontSize,
-                modifier = Modifier.graphicsLayer(scaleX = -1f),
-            )
-        }
-    }
+    Image(
+        painter = painterResource(R.drawable.ic_launcher_foreground),
+        contentDescription = "DOGMA",
+        contentScale = ContentScale.Fit,
+        colorFilter = ColorFilter.tint(tint),
+        modifier = modifier.size(size),
+    )
 }
 
 @Composable
-fun BrandBlock(
-    logoSize: Dp = 64.dp,
-    nameColor: Color = Color.White,
+fun DogmaTopBar(
+    lang: com.dogma.portal.ui.Lang,
+    tagline: String,
+    serverLabel: String,
+    onLang: (com.dogma.portal.ui.Lang) -> Unit,
+    onServer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        DogmaLogo(size = logoSize)
-        Spacer(Modifier.height(12.dp))
+    val p = dogmaPalette()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AppMark(size = 22.dp)
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(
+                text = "DOGMA",
+                color = p.fg,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 2.2.sp,
+            )
+            Text(
+                text = tagline,
+                color = p.muted,
+                fontSize = 10.5.sp,
+            )
+        }
+        Spacer(Modifier.weight(1f))
         Text(
-            text = "Dogma VPN",
-            color = nameColor,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
+            text = "РУ",
+            color = if (lang == com.dogma.portal.ui.Lang.RU) p.warning else p.muted,
+            fontSize = 13.sp,
+            letterSpacing = 0.4.sp,
+            modifier = Modifier
+                .clickable { onLang(com.dogma.portal.ui.Lang.RU) }
+                .padding(horizontal = 3.dp, vertical = 4.dp),
         )
+        Text(
+            text = "/",
+            color = p.muted.copy(alpha = 0.45f),
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
+        Text(
+            text = "EN",
+            color = if (lang == com.dogma.portal.ui.Lang.EN) p.warning else p.muted,
+            fontSize = 13.sp,
+            letterSpacing = 0.4.sp,
+            modifier = Modifier
+                .clickable { onLang(com.dogma.portal.ui.Lang.EN) }
+                .padding(horizontal = 3.dp, vertical = 4.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onServer)
+                .semantics { contentDescription = serverLabel },
+            contentAlignment = Alignment.Center,
+        ) {
+            DogmaIcon(DogmaIconKind.GEAR, Modifier.size(18.dp), tint = p.muted)
+        }
     }
 }
 
@@ -156,7 +201,6 @@ fun DogmaIcon(
     tint: Color = dogmaPalette().fg,
     strokeWidth: Dp = 1.7.dp,
 ) {
-    val fill = kind == DogmaIconKind.STAR || kind == DogmaIconKind.SIGNAL
     Canvas(modifier) {
         val u = size.minDimension / 20f
         val sw = strokeWidth.toPx()
@@ -346,8 +390,8 @@ fun PrimaryButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.then(sizing).height(48.dp),
-        shape = RoundedCornerShape(14.dp),
+        modifier = modifier.then(sizing).height(44.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = p.accent,
             contentColor = p.accentFg,
@@ -376,8 +420,8 @@ fun OutlineButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.then(sizing).height(48.dp),
-        shape = RoundedCornerShape(14.dp),
+        modifier = modifier.then(sizing).height(44.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = p.card,
             contentColor = fg,
@@ -402,7 +446,7 @@ fun MiniButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.height(36.dp),
-        shape = RoundedCornerShape(9.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = p.accent,
             contentColor = p.accentFg,
@@ -436,62 +480,59 @@ fun DogmaTextField(
     onValueChange: (String) -> Unit,
     placeholder: String,
     modifier: Modifier = Modifier,
+    label: String? = null,
     password: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
     imeAction: ImeAction = ImeAction.Next,
     onDone: (() -> Unit)? = null,
-    authStyle: Boolean = false,
     enabled: Boolean = true,
-    leading: DogmaIconKind? = null,
 ) {
     val p = dogmaPalette()
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val bg = if (authStyle) p.authInput else p.chipBg
-    val border = if (focused) {
-        if (authStyle) Color(0xFF4A4A4A) else p.fg
-    } else {
-        if (authStyle) p.authBorder else p.border
-    }
-    val fg = if (authStyle) p.authFg else p.fg
-    val hint = if (authStyle) p.authMuted else p.muted
 
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        enabled = enabled,
-        singleLine = true,
-        textStyle = TextStyle(fontSize = 14.sp, color = fg),
-        cursorBrush = SolidColor(fg),
-        visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-        keyboardOptions = KeyboardOptions(
-            keyboardType = keyboardType,
-            imeAction = imeAction,
-            autoCorrect = false,
-        ),
-        keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }),
-        interactionSource = interaction,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(46.dp)
-            .background(bg, RoundedCornerShape(11.dp))
-            .border(1.dp, border, RoundedCornerShape(11.dp))
-            .padding(horizontal = 14.dp),
-        decorationBox = { inner ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (leading != null) {
-                    DogmaIcon(leading, Modifier.size(17.dp), tint = hint)
-                    Spacer(Modifier.width(9.dp))
-                }
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (value.isEmpty()) {
-                        Text(placeholder, fontSize = 14.sp, color = hint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Column(modifier.fillMaxWidth()) {
+        if (label != null) {
+            Text(label, color = p.muted, fontSize = 13.sp)
+            Spacer(Modifier.height(8.dp))
+        }
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            enabled = enabled,
+            singleLine = true,
+            textStyle = TextStyle(fontSize = 14.sp, color = p.fg),
+            cursorBrush = SolidColor(p.warning),
+            visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = keyboardType,
+                imeAction = imeAction,
+                autoCorrect = false,
+            ),
+            keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }),
+            interactionSource = interaction,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .background(p.bg, RoundedCornerShape(8.dp))
+                .border(1.dp, if (focused) p.warning else p.border, RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp),
+            decorationBox = { inner ->
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty() && placeholder.isNotEmpty()) {
+                        Text(
+                            placeholder,
+                            fontSize = 14.sp,
+                            color = Color(0xFF736D63),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                     inner()
                 }
-            }
-        },
-    )
+            },
+        )
+    }
 }
 
 // ── cards / rows ────────────────────────────────────────────────────────────
@@ -544,8 +585,8 @@ fun SettingRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(p.card, RoundedCornerShape(13.dp))
-            .border(1.dp, p.border, RoundedCornerShape(13.dp))
+            .background(p.card, RoundedCornerShape(10.dp))
+            .border(1.dp, p.border, RoundedCornerShape(10.dp))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 15.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -582,10 +623,10 @@ fun DogmaSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: 
         onCheckedChange = onCheckedChange,
         modifier = modifier,
         colors = SwitchDefaults.colors(
-            checkedThumbColor = p.bg,
-            checkedTrackColor = p.fg,
-            checkedBorderColor = p.fg,
-            uncheckedThumbColor = Color.White,
+            checkedThumbColor = p.accentFg,
+            checkedTrackColor = p.warning,
+            checkedBorderColor = p.warning,
+            uncheckedThumbColor = p.muted,
             uncheckedTrackColor = p.track,
             uncheckedBorderColor = p.border,
         ),
@@ -684,11 +725,11 @@ fun ServerRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(p.card, RoundedCornerShape(13.dp))
+            .background(p.card, RoundedCornerShape(10.dp))
             .border(
                 width = 1.dp,
-                color = if (selected) p.fg else p.border,
-                shape = RoundedCornerShape(13.dp),
+                color = if (selected) p.warning else p.border,
+                shape = RoundedCornerShape(10.dp),
             )
             .clickable(onClick = onSelect)
             .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -752,13 +793,13 @@ fun StatCard(
     val p = dogmaPalette()
     Column(
         modifier = modifier
-            .background(p.card, RoundedCornerShape(13.dp))
-            .border(1.dp, p.border, RoundedCornerShape(13.dp))
+            .background(p.card, RoundedCornerShape(14.dp))
+            .border(1.dp, p.border, RoundedCornerShape(14.dp))
             .padding(horizontal = 15.dp, vertical = 13.dp),
     ) {
-        Text(label, color = p.muted, fontSize = 10.5.sp)
+        Text(label, color = p.muted, fontSize = 12.sp)
         Spacer(Modifier.height(3.dp))
-        Text(value, color = p.fg, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Text(value, color = p.fg, fontSize = 17.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -781,16 +822,21 @@ fun RangeTabs(
             val on = key == selected
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (on) p.fg else Color.Transparent)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(if (on) p.track else Color.Transparent)
+                    .border(
+                        1.dp,
+                        if (on) p.warning.copy(alpha = 0.55f) else Color.Transparent,
+                        RoundedCornerShape(7.dp),
+                    )
                     .clickable { onSelect(key) }
                     .padding(horizontal = 14.dp, vertical = 7.dp),
             ) {
                 Text(
                     t[key],
-                    color = if (on) p.bg else p.muted,
+                    color = if (on) p.warning else p.muted,
                     fontSize = 12.5.sp,
-                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                    fontWeight = if (on) FontWeight.Medium else FontWeight.Normal,
                 )
             }
         }
@@ -821,7 +867,7 @@ fun SpeedChart(
                     }
                     drawPath(path, color, style = Stroke(width, cap = StrokeCap.Round, join = StrokeJoin.Round))
                 }
-                lineFor(points.map { it.down }, p.fg, 1.8.dp.toPx())
+                lineFor(points.map { it.down }, p.warning, 1.8.dp.toPx())
                 lineFor(points.map { it.up }, p.muted, 1.4.dp.toPx())
 
                 // Подписи серий прямо у последних точек вместо легенды.
@@ -834,7 +880,7 @@ fun SpeedChart(
                 }
                 val lastDownY = h - (points.last().down / maxValue).toFloat() * (h - 8f) - 4f
                 val lastUpY = h - (points.last().up / maxValue).toFloat() * (h - 8f) - 4f
-                paint.color = p.fg.toArgb()
+                paint.color = p.warning.toArgb()
                 drawContext.canvas.nativeCanvas.drawText("↓", endX, lastDownY.coerceIn(12.dp.toPx(), h - 4.dp.toPx()), paint)
                 paint.color = p.muted.toArgb()
                 drawContext.canvas.nativeCanvas.drawText("↑", endX, lastUpY.coerceIn(12.dp.toPx(), h - 4.dp.toPx()), paint)
@@ -855,10 +901,19 @@ fun SpeedChart(
 @Composable
 fun VpnRing(
     state: VpnState,
+    enabled: Boolean,
+    contentDescription: String,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
     inner: @Composable BoxScope.() -> Unit,
 ) {
     val p = dogmaPalette()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && enabled) 0.975f else 1f,
+        label = "ringScale",
+    )
     val transition = rememberInfiniteTransition(label = "ring")
     val angle by transition.animateFloat(
         initialValue = 0f,
@@ -869,7 +924,24 @@ fun VpnRing(
         ),
         label = "ringAngle",
     )
-    Box(modifier.size(240.dp), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = modifier
+            .size(240.dp)
+            .graphicsLayer(scaleX = scale, scaleY = scale)
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = interaction,
+                indication = androidx.compose.foundation.LocalIndication.current,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .semantics {
+                this.contentDescription = contentDescription
+                role = Role.Button
+            },
+        contentAlignment = Alignment.Center,
+    ) {
         Canvas(Modifier.fillMaxSize()) {
             val stroke = 5.dp.toPx()
             val radius = (size.minDimension - stroke) / 2f - 4.dp.toPx()
@@ -878,7 +950,7 @@ fun VpnRing(
             when (state) {
                 VpnState.CONNECTED -> {
                     drawArc(
-                        color = p.fg,
+                        color = p.warning,
                         startAngle = -90f,
                         sweepAngle = 360f,
                         useCenter = false,
@@ -886,11 +958,11 @@ fun VpnRing(
                         size = Size(radius * 2, radius * 2),
                         style = Stroke(stroke, cap = StrokeCap.Round),
                     )
-                    drawCircle(p.fg, 5.dp.toPx(), Offset(center.x, center.y - radius))
+                    drawCircle(p.warning, 5.dp.toPx(), Offset(center.x, center.y - radius))
                 }
                 VpnState.CONNECTING -> {
                     drawArc(
-                        color = p.fg,
+                        color = p.warning,
                         startAngle = angle,
                         sweepAngle = 80f,
                         useCenter = false,
@@ -905,7 +977,7 @@ fun VpnRing(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(26.dp)
+                .padding(28.dp)
                 .background(p.card, CircleShape)
                 .border(1.dp, p.border, CircleShape),
             contentAlignment = Alignment.Center,
@@ -944,13 +1016,13 @@ fun ChatBadge(count: Int, modifier: Modifier = Modifier) {
         modifier = modifier
             .height(18.dp)
             .widthIn(min = 18.dp)
-            .background(p.danger, CircleShape)
+            .background(p.warning, CircleShape)
             .padding(horizontal = 5.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             if (count > 99) "99+" else count.toString(),
-            color = Color.White,
+            color = p.accentFg,
             fontSize = 10.5.sp,
             fontWeight = FontWeight.Bold,
         )

@@ -78,7 +78,14 @@ class DogmaVpnService : VpnService(), CommandServerHandler {
         scope.launch {
             try {
                 val settings = prefs.settings()
-                val config = SingBoxConfig.build(node, settings)
+                val smart = prefs.smartConfig
+                val config = if (!smart.isNullOrBlank()) {
+                    Log.i(TAG, "using portal smart config")
+                    SmartConfig.prepare(smart, node.name, settings)
+                } else {
+                    Log.i(TAG, "using fallback node config")
+                    SingBoxConfig.build(node, settings)
+                }
                 Libbox.checkConfig(config)
 
                 val platformInterface = DogmaPlatformInterface(this@DogmaVpnService)

@@ -79,6 +79,11 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_SELECTED_NODE, null)
         set(value) = sp.edit().putString(KEY_SELECTED_NODE, value).apply()
 
+    /** Smart-конфиг портала (format=singbox) с DNS и маршрутизацией. */
+    var smartConfig: String?
+        get() = sp.getString(KEY_SMART_CONFIG, null)
+        set(value) = sp.edit().putString(KEY_SMART_CONFIG, value).apply()
+
     fun settings(): AppSettings = AppSettings(
         theme = when (theme) {
             "dark" -> ThemeMode.DARK
@@ -143,6 +148,7 @@ class Prefs(context: Context) {
         private const val KEY_FAVORITES = "favorites"
         private const val KEY_LAST_SERVER = "last_server"
         private const val KEY_SELECTED_NODE = "selected_node"
+        private const val KEY_SMART_CONFIG = "smart_config"
 
         fun normalizeBaseUrl(raw: String): String {
             var s = raw.trim()

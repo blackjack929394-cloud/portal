@@ -55,6 +55,7 @@ data class ChatUi(
 data class AppState(
     val booting: Boolean = true,
     val bootError: Boolean = false,
+    val sso: Boolean = false,
     val user: User? = null,
     val authBusy: Boolean = false,
     val authError: String? = null,
@@ -104,6 +105,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private var ipSince = 0L
     private var ipJob: Job? = null
+    private var lastVpnState = VpnState.DISCONNECTED
 
     init {
         bootstrap()
@@ -127,13 +129,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
             try {
+                val config = runCatching { repo.authConfig() }.getOrDefault(com.dogma.portal.data.AuthConfig())
                 val user = repo.me()
                 if (user == null) {
-                    _state.update { it.copy(booting = false, user = null) }
+                    _state.update {
+                        it.copy(
+                            booting = false,
+                            user = null,
+                            sso = config.sso,
+                        )
+                    }
                 } else {
                     prefs.userName = user.name
                     prefs.userEmail = user.email
-                    _state.update { it.copy(booting = false, user = user) }
+                    _state.update {
+                        it.copy(
+                            booting = false,
+                            user = user,
+                            sso = config.sso,
+                        )
+                    }
                     loadSubscription()
                     refreshUnread()
                 }
@@ -200,8 +215,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             VpnRuntime.setDisconnected()
             val settings = prefs.settings()
             val lang = Lang.from(prefs.lang)
+            val sso = _state.value.sso
             _state.value = AppState(
                 booting = false,
+                sso = sso,
                 settings = settings,
                 baseUrl = prefs.baseUrl,
                 lang = lang,
@@ -212,6 +229,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearAuthError() {
         _state.update { it.copy(authError = null) }
+    }
+
+    /** Завершает вход после SSO: переносит cookie из WebView и проверяет сессию. */
+    fun applySsoCookie(header: String) {
+        viewModelScope.launch {
+            _state.update { it.copy(authBusy = true, authError = null) }
+            repo.setSessionCookie(header)
+            val user = runCatching { repo.me() }.getOrNull()
+            if (user == null) {
+                _state.update {
+                    it.copy(authBusy = false, authError = Strings(it.lang)["ssoFailed"])
+                }
+            } else {
+                onAuthed(user)
+            }
+        }
     }
 
     fun updateBaseUrl(raw: String) {
@@ -292,6 +325,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         val nodes = text?.let(NodeParser::parseLines).orEmpty()
+        val smart = runCatching { repo.smartSubscription(token) }.getOrNull()
+        prefs.smartConfig = smart?.takeIf { it.isNotBlank() }
         val previous = _state.value.selected
         val last = prefs.lastServer
         val selected = previous?.let { old -> nodes.find { it.name == old.name } }
@@ -435,8 +470,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         prefs.selectedNodeRaw = node.raw
         prefs.lastServer = node.name
-        runCatching { VpnManager.start(application) }
-            .onFailure { VpnRuntime.setError(it.message ?: "VPN start failed") }
+        viewModelScope.launch {
+            val token = _state.value.subscription?.token
+            if (!token.isNullOrBlank()) {
+                runCatching { repo.smartSubscription(token) }
+                    .getOrNull()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { prefs.smartConfig = it }
+            }
+            runCatching { VpnManager.start(application) }
+                .onFailure { VpnRuntime.setError(it.message ?: "VPN start failed") }
+        }
     }
 
     fun stopVpn() {
@@ -451,6 +495,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             VpnRuntime.status.collect { vpn ->
                 updateVpnDerived(vpn)
+                if (vpn.state == VpnState.CONNECTED && lastVpnState != VpnState.CONNECTED) {
+                    pingAll()
+                }
+                lastVpnState = vpn.state
                 if (vpn.state == VpnState.CONNECTED && vpn.connectedSince != ipSince) {
                     ipSince = vpn.connectedSince
                     fetchExternalIp()
@@ -478,18 +526,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         ipJob?.cancel()
         ipJob = viewModelScope.launch {
             _state.update { it.copy(externalIp = null) }
-            val ip = withContext(Dispatchers.IO) {
-                runCatching {
-                    val request = Request.Builder()
-                        .url("https://api.ipify.org?format=json")
-                        .build()
-                    ipClient.newCall(request).execute().use { response ->
-                        val body = response.body?.string().orEmpty()
-                        Json.parseToJsonElement(body).jsonObject["ip"]?.jsonPrimitive?.contentOrNull
-                    }
-                }.getOrNull()
+            var result: String?
+            repeat(3) { attempt ->
+                if (attempt > 0) delay(2_000)
+                result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val request = Request.Builder()
+                            .url("https://api.ipify.org?format=json")
+                            .build()
+                        ipClient.newCall(request).execute().use { response ->
+                            val body = response.body?.string().orEmpty()
+                            Json.parseToJsonElement(body).jsonObject["ip"]?.jsonPrimitive?.contentOrNull
+                        }
+                    }.getOrNull()
+                }
+                if (result != null) {
+                    _state.update { it.copy(externalIp = result) }
+                    return@launch
+                }
             }
-            _state.update { it.copy(externalIp = ip) }
+            _state.update { it.copy(externalIp = null) }
         }
     }
 
@@ -596,6 +652,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         VpnRuntime.setDisconnected()
         _state.value = AppState(
             booting = false,
+            sso = _state.value.sso,
             settings = prefs.settings(),
             baseUrl = prefs.baseUrl,
             lang = Lang.from(prefs.lang),

@@ -11,8 +11,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,13 +30,13 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.dogma.portal.data.ThemeMode
-import com.dogma.portal.ui.Lang
 import com.dogma.portal.ui.MainScreen
 import com.dogma.portal.ui.Strings
 import com.dogma.portal.ui.Tab
 import com.dogma.portal.ui.auth.AuthScreen
+import com.dogma.portal.ui.auth.SsoDialog
 import com.dogma.portal.ui.chat.ChatScreen
+import com.dogma.portal.ui.components.DogmaTopBar
 import com.dogma.portal.ui.components.ServerDialog
 import com.dogma.portal.ui.theme.DogmaTheme
 import com.dogma.portal.ui.theme.dogmaPalette
@@ -57,15 +57,9 @@ private fun DogmaRoot(vm: AppViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     val vpn by VpnRuntime.status.collectAsState()
     val t = remember(state.lang) { Strings(state.lang) }
-    val systemDark = isSystemInDarkTheme()
-    val dark = when (state.settings.theme) {
-        ThemeMode.DARK -> true
-        ThemeMode.LIGHT -> false
-        ThemeMode.SYSTEM -> systemDark
-    }
 
-    DogmaTheme(dark = dark) {
-        RootContent(vm = vm, state = state, vpn = vpn, t = t, dark = dark)
+    DogmaTheme {
+        RootContent(vm = vm, state = state, vpn = vpn, t = t)
     }
 }
 
@@ -75,23 +69,22 @@ private fun RootContent(
     state: AppState,
     vpn: com.dogma.portal.vpn.VpnStatus,
     t: Strings,
-    dark: Boolean,
 ) {
     val p = dogmaPalette()
     val context = LocalContext.current
     val view = LocalView.current
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     var showServer by rememberSaveable { mutableStateOf(false) }
+    var showSso by rememberSaveable { mutableStateOf(false) }
 
     SideEffect {
         val window = (context as? Activity)?.window ?: return@SideEffect
-        val userSignedIn = state.user != null
-        window.statusBarColor = if (userSignedIn) p.bg.toArgb() else p.authBg.toArgb()
-        window.navigationBarColor = if (userSignedIn) p.sideBg.toArgb() else p.authBg.toArgb()
+        window.statusBarColor = p.bg.toArgb()
+        window.navigationBarColor = p.bg.toArgb()
         val controller = WindowCompat.getInsetsController(window, view)
-        controller.isAppearanceLightStatusBars = userSignedIn && !dark
+        controller.isAppearanceLightStatusBars = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            controller.isAppearanceLightNavigationBars = userSignedIn && !dark
+            controller.isAppearanceLightNavigationBars = false
         }
     }
 
@@ -121,46 +114,51 @@ private fun RootContent(
     BackHandler(enabled = state.chat.open) { vm.closeChat() }
     BackHandler(enabled = !state.chat.open && tab != Tab.HOME) { tab = Tab.HOME }
 
-    Box(Modifier.fillMaxSize().background(if (state.user == null) p.authBg else p.bg)) {
-        if (state.user == null) {
-            AuthScreen(
-                state = state,
-                t = t,
-                onLogin = vm::login,
-                onRegister = vm::register,
-                onRetry = vm::bootstrap,
-                onClearError = vm::clearAuthError,
-                onOpenServer = { showServer = true },
+    Box(Modifier.fillMaxSize().background(p.bg)) {
+        Column(Modifier.fillMaxSize()) {
+            DogmaTopBar(
+                lang = state.lang,
+                tagline = t["brandTag"],
+                serverLabel = t["serverTitle"],
+                onLang = vm::setLang,
+                onServer = { showServer = true },
             )
-        } else {
-            MainScreen(
-                state = state,
-                vpn = vpn,
-                t = t,
-                tab = tab,
-                onTab = { tab = it },
-                onConnect = connect,
-                onDisconnect = vm::stopVpn,
-                onOpenChat = vm::openChat,
-                onRequestAccess = vm::requestAccess,
-                onSelectNode = { node ->
-                    vm.selectNode(node)
-                    tab = Tab.HOME
-                },
-                onToggleFavorite = vm::toggleFavorite,
-                onRefreshSubscription = vm::refreshSubscription,
-                onPing = vm::pingAll,
-                onKillSwitch = vm::setKillSwitch,
-                onAutostart = vm::setAutostart,
-                onLeakProtection = vm::setLeakProtection,
-                onDns = vm::setDns,
-                onSplitTunneling = vm::setSplitTunneling,
-                onCycleTheme = vm::cycleTheme,
-                onLanguage = vm::setLang,
-                onOpenServer = { showServer = true },
-                onLogout = vm::logout,
-                onRefreshStats = vm::refreshStats,
-            )
+            Box(Modifier.weight(1f).fillMaxSize()) {
+                if (state.user == null) {
+                    AuthScreen(
+                        state = state,
+                        t = t,
+                        onLogin = vm::login,
+                        onRegister = vm::register,
+                        onRetry = vm::bootstrap,
+                        onClearError = vm::clearAuthError,
+                        onSso = { showSso = true },
+                    )
+                } else {
+                    MainScreen(
+                        state = state,
+                        vpn = vpn,
+                        t = t,
+                        tab = tab,
+                        onTab = { tab = it },
+                        onConnect = connect,
+                        onDisconnect = vm::stopVpn,
+                        onOpenChat = vm::openChat,
+                        onRequestAccess = vm::requestAccess,
+                        onSelectNode = { node ->
+                            vm.selectNode(node)
+                            tab = Tab.HOME
+                        },
+                        onToggleFavorite = vm::toggleFavorite,
+                        onRefreshSubscription = vm::refreshSubscription,
+                        onPing = vm::pingAll,
+                        onKillSwitch = vm::setKillSwitch,
+                        onAutostart = vm::setAutostart,
+                        onLogout = vm::logout,
+                        onRefreshStats = vm::refreshStats,
+                    )
+                }
+            }
         }
 
         if (state.chat.open) {
@@ -183,6 +181,19 @@ private fun RootContent(
                 showServer = false
                 vm.updateBaseUrl(url)
             },
+        )
+    }
+
+    if (showSso) {
+        SsoDialog(
+            startUrl = state.baseUrl + "/auth/login",
+            baseUrl = state.baseUrl,
+            t = t,
+            onCookie = { header ->
+                showSso = false
+                vm.applySsoCookie(header)
+            },
+            onDismiss = { showSso = false },
         )
     }
 }

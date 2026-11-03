@@ -101,4 +101,11 @@ class PortalRepository(private val prefs: Prefs) {
     } catch (e: ApiException) {
         if (e.status == 400 || e.status == 404 || e.status == 410 || e.status == 501) null else throw e
     }
+
+    /** Готовая smart-подписка портала: sing-box JSON с DNS и правилами маршрутизации. */
+    suspend fun smartSubscription(token: String): String? = try {
+        api.request("GET", "/api/v1/sub/$token?format=singbox")
+    } catch (e: ApiException) {
+        if (e.status == 400 || e.status == 404 || e.status == 410 || e.status == 501) null else throw e
+    }
 }

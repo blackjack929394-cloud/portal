@@ -185,7 +185,7 @@ private fun ChatBubble(message: ChatMessage) {
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .background(
-                    color = if (mine) p.accent else p.chipBg,
+                    color = if (mine) p.warning else p.bg,
                     shape = RoundedCornerShape(
                         topStart = 14.dp,
                         topEnd = 14.dp,
@@ -209,7 +209,7 @@ private fun ChatBubble(message: ChatMessage) {
         ) {
             Text(
                 message.text,
-                color = if (mine) p.accentFg else p.fg,
+                color = if (mine) androidx.compose.ui.graphics.Color(0xFF1A1400) else p.fg,
                 fontSize = 13.5.sp,
                 lineHeight = 19.sp,
             )

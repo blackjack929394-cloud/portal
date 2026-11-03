@@ -1,6 +1,7 @@
 package com.dogma.portal.ui.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -101,23 +102,24 @@ fun ProfileScreen(
             }
 
             Spacer(Modifier.height(16.dp))
-            val cardColor = when (status) {
-                "active" -> if (p.bg.luminance() < 0.2f) Color(0xFF262626) else Color(0xFF111111)
-                "denied" -> Color(0xFF5C2020)
-                else -> Color(0xFF3A3A3A)
+            val titleColor = when (status) {
+                "active" -> p.warning
+                "denied" -> p.danger
+                else -> p.muted
             }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(cardColor, RoundedCornerShape(15.dp))
+                    .background(p.card, RoundedCornerShape(14.dp))
+                    .border(1.dp, p.border, RoundedCornerShape(14.dp))
                     .padding(horizontal = 18.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         t["subscription"],
-                        color = Color.White.copy(alpha = 0.55f),
-                        fontSize = 10.5.sp,
+                        color = p.muted,
+                        fontSize = 11.sp,
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
@@ -127,9 +129,9 @@ fun ProfileScreen(
                             "denied" -> t["planDenied"]
                             else -> t["planNone"]
                         },
-                        color = Color.White,
+                        color = titleColor,
                         fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -137,15 +139,15 @@ fun ProfileScreen(
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         t["until"],
-                        color = Color.White.copy(alpha = 0.55f),
-                        fontSize = 10.5.sp,
+                        color = p.muted,
+                        fontSize = 11.sp,
                     )
                     Spacer(Modifier.height(3.dp))
                     Text(
                         if (status == "active") formatDate(state.subscription?.expiresAt) else "—",
-                        color = Color.White,
+                        color = if (status == "active") p.fg else p.muted,
                         fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Medium,
                     )
                 }
             }
