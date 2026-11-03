@@ -34,7 +34,7 @@ const TABS = [
   { id: 'chat', label: 'Чат' },
 ];
 
-const REFRESH_MS = 5000;
+const REFRESH_MS = 15000;
 const ADMIN_TOKEN_KEY = 'dogma_admin_token';
 
 function usePolling(loader, deps = [], intervalMs = REFRESH_MS) {
@@ -94,6 +94,21 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
+// Один формат чисел: целые без дробной части, дробные через запятую.
+function fmtGb(n) {
+  const v = Number(n) || 0;
+  return Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', ',');
+}
+
+const NODE_STATUS = { active: 'активна', blocked: 'заблокирована' };
+const DEPLOY_STATUS = {
+  active: 'развёрнута',
+  deployed: 'развёрнута',
+  deploying: 'идёт деплой',
+  failed: 'ошибка',
+  pending: 'ожидает',
+};
+
 function copy(text, notify) {
   const done = () => notify && notify('Скопировано');
   if (navigator.clipboard && window.isSecureContext) {
@@ -129,7 +144,16 @@ export default function AdminApp() {
     if (!token) { setChecking(false); return; }
     verifyToken(token)
       .then(() => setAuthed(true))
-      .catch(() => { try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch { /* ignore */ } })
+      .catch((err) => {
+        // 401 — токен правда неверный, его можно забыть. Любая другая ошибка
+        // (429, сеть) не должна выкидывать админа из панели.
+        if (err?.status === 401) {
+          try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch { /* ignore */ }
+          setToken('');
+        } else {
+          setLoginErr('Не удалось проверить токен: ' + (err?.message || 'сеть'));
+        }
+      })
       .finally(() => setChecking(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -166,7 +190,7 @@ export default function AdminApp() {
 
   if (checking) {
     return (
-      <div className="page"><div className="aura" aria-hidden="true" />
+      <div className="page">
         <main className="stage"><section className="panel"><div className="center"><div className="pulse" /></div></section></main>
       </div>
     );
@@ -174,16 +198,20 @@ export default function AdminApp() {
 
   if (!authed) {
     return (
-      <div className="page"><div className="aura" aria-hidden="true" />
+      <div className="page">
         <header className="topbar">
-          <div className="brand"><span className="brand-mark">DOGMA</span><span className="brand-tag">Администрирование</span></div>
+          <div className="brand">
+            <AdminGlyph />
+            <span className="brand-mark">DOGMA</span>
+            <span className="brand-tag">Администрирование</span>
+          </div>
         </header>
         <main className="stage">
-          <section className="panel">
-            <h1 className="title" style={{ textAlign: 'center' }}>Вход в админку</h1>
-            <p className="lead" style={{ textAlign: 'center' }}>Введите admin-токен.</p>
+          <section className="panel auth-panel">
+            <h1 className="title">Вход в панель управления</h1>
+            <p className="lead">Введите токен администратора</p>
             <label className="field">
-              <span className="field-label">Admin token</span>
+              <span className="field-label">Токен администратора</span>
               <input type="password" value={token} onChange={(e) => setToken(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && onLogin()} autoFocus />
             </label>
@@ -195,26 +223,36 @@ export default function AdminApp() {
     );
   }
 
-  return (
-    <div className="page"><div className="aura" aria-hidden="true" />
-      <header className="topbar">
-        <div className="brand"><span className="brand-mark">DOGMA</span><span className="brand-tag">Администрирование</span></div>
-        <div className="topbar-right">
-          <span className="live-dot" title="Данные обновляются автоматически">● live</span>
-          <button className="user-chip" onClick={onLogout}>Выйти</button>
-        </div>
-      </header>
+  const currentTab = TABS.find((t) => t.id === tab);
 
-      <main className="admin-main">
-        <nav className="tabs">
+  return (
+    <div className="admin">
+      <aside className="admin-side">
+        <div className="admin-brand">
+          <AdminGlyph />
+          <div>
+            <div className="brand-mark">DOGMA</div>
+            <div className="brand-tag">Администрирование</div>
+          </div>
+        </div>
+
+        <nav className="admin-nav" aria-label="Разделы">
           {TABS.map((tb) => (
-            <button key={tb.id} className={tab === tb.id ? 'tab on' : 'tab'} onClick={() => setTab(tb.id)}>
-              {tb.label}
-              {TAB_BADGE[tb.id] > 0 && <span className="badge pending" style={{ marginLeft: 8 }}>{TAB_BADGE[tb.id]}</span>}
+            <button key={tb.id} className={tab === tb.id ? 'on' : ''} onClick={() => setTab(tb.id)}>
+              <span>{tb.label}</span>
+              {TAB_BADGE[tb.id] > 0 && <span className="nav-count">{TAB_BADGE[tb.id]}</span>}
             </button>
           ))}
         </nav>
 
+        <div className="admin-side-foot">
+          <span className="live-dot" title="Данные обновляются автоматически">● онлайн</span>
+          <button className="user-chip" onClick={onLogout}>Выйти</button>
+        </div>
+      </aside>
+
+      <main className="admin-content">
+        <h1 className="page-title">{currentTab?.label}</h1>
         {tab === 'overview' && <OverviewTab token={token} pendingCount={pendingCount} chatUnread={chatUnread} goTo={setTab} />}
         {tab === 'nodes' && <NodesTab token={token} notify={notify} />}
         {tab === 'subscriptions' && <SubscriptionsTab token={token} notify={notify} />}
@@ -227,6 +265,17 @@ export default function AdminApp() {
         {toasts.map((t) => <div key={t.id} className={`toast ${t.type}`}>{t.message}</div>)}
       </div>
     </div>
+  );
+}
+
+// Знак продукта — тот же маршрут из двух узлов, что и в клиенте.
+function AdminGlyph() {
+  return (
+    <svg className="brand-glyph" viewBox="0 0 24 12" aria-hidden="true">
+      <path d="M2 9h6l3-3h11" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="2" cy="9" r="1.6" fill="currentColor" />
+      <circle cx="22" cy="6" r="1.6" fill="var(--gold)" />
+    </svg>
   );
 }
 
@@ -249,12 +298,12 @@ function OverviewTab({ token, pendingCount, chatUnread, goTo }) {
   ];
 
   return (
-    <div className="cards">
+    <div className="stats">
       {cards.map((c) => (
-        <button key={c.label} className={`card${c.warn ? ' warn' : ''}`} onClick={() => goTo(c.to)}>
-          <div className="card-value">{c.value}</div>
-          <div className="card-label">{c.label}</div>
-          <div className="card-hint">{c.hint}</div>
+        <button key={c.label} className={`stat${c.warn ? ' warn' : ''}`} onClick={() => goTo(c.to)}>
+          <span className="stat-value">{c.value}</span>
+          <span className="stat-label">{c.label}</span>
+          <span className="stat-hint">{c.hint}</span>
         </button>
       ))}
     </div>
@@ -353,14 +402,14 @@ function NodesTab({ token, notify }) {
                 </tr>
               ) : (
                 <tr key={r.id}>
-                  <td>{r.name}</td>
+                  <td className="nowrap">{r.name}</td>
                   <td className="mono">{r.host} <button className="linkbtn" title="Копировать хост" onClick={() => copy(r.host, notify)}>копир.</button></td>
                   <td>{r.port}</td>
                   <td>{r.kind}</td>
                   <td>{r.region || '—'}</td>
-                  <td><span className={`badge ${r.effectiveStatus || r.status}`}>{r.effectiveStatus || r.status}</span></td>
+                  <td><span className={`badge ${r.effectiveStatus || r.status}`}>{NODE_STATUS[r.effectiveStatus || r.status] || r.effectiveStatus || r.status}</span></td>
                   <td>
-                    <span className={`badge ${r.deploymentStatus || 'pending'}`}>{r.deploymentStatus || 'pending'}</span>
+                    <span className={`badge ${r.deploymentStatus || 'pending'}`}>{DEPLOY_STATUS[r.deploymentStatus] || 'ожидает'}</span>
                     {r.deploymentError && <div className="note err-text" title={r.deploymentError}>{r.deploymentError.slice(0, 40)}…</div>}
                     {r.wgTunnelIp && <div className="dim mono">WG: {r.wgTunnelIp}</div>}
                   </td>
@@ -444,29 +493,31 @@ function SubscriptionsTab({ token, notify }) {
             <button key={f.id} className={filter === f.id ? 'on' : ''} onClick={() => setFilter(f.id)}>{f.label}</button>
           ))}
         </div>
-        <input className="search" placeholder="Поиск: имя, email, токен" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="search" placeholder="Поиск" value={q} onChange={(e) => setQ(e.target.value)} />
         <span className="dim">{filtered.length} из {rows.length}</span>
       </div>
 
       {filtered.length === 0 ? <p className="admin-msg">Ничего не найдено.</p> : (
         <div className="table-wrap">
           <table className="atable">
-            <thead><tr><th>Пользователь</th><th>Email</th><th>Токен</th><th>Статус</th><th>Трафик</th><th>Создан</th><th>Действия</th></tr></thead>
+            <thead><tr><th>Пользователь</th><th>Токен</th><th>Статус</th><th>Трафик</th><th>Создан</th><th>Действия</th></tr></thead>
             <tbody>
               {filtered.map((r) => (
                 <Fragment key={r.id}>
                   <tr>
-                    <td>{r.userName || '—'}</td>
-                    <td>{r.userEmail || '—'}</td>
+                    <td className="user-cell">
+                      <div>{r.userName || '—'}</div>
+                      {r.userEmail && <div className="cell-sub">{r.userEmail}</div>}
+                    </td>
                     <td className="mono">{r.token.slice(0, 12)}… <button className="linkbtn" title="Копировать токен" onClick={() => copy(r.token, notify)}>копир.</button></td>
                     <td><span className={`badge ${r.effectiveStatus || r.status}`}>{STATUS_LABELS[r.effectiveStatus || r.status] || r.effectiveStatus || r.status}</span></td>
-                    <td className="dim">{(r.trafficUsedGb || 0).toFixed(1)} / {r.trafficLimitGb ? `${r.trafficLimitGb} ГБ` : '∞'}</td>
+                    <td className="dim num">{fmtGb(r.trafficUsedGb)} / {r.trafficLimitGb ? `${r.trafficLimitGb} ГБ` : '∞'}</td>
                     <td className="dim">{fmtDate(r.createdAt)}</td>
                     <td className="row-actions">
                       {(r.effectiveStatus || r.status) === 'active' && (
                         <>
-                          <button className="btn ghost xs" title="Умная ссылка с маршрутизацией — для Hiddify и телефона" onClick={() => copy(subUrl(r.token, 'singbox'), notify)}>Ссылка Hiddify</button>
-                          <button className="btn ghost xs" title="Зашифрованная ссылка — открывается только в приложении Dogma" onClick={() => copy(subUrl(r.token, 'enc'), notify)}>Ссылка Dogma</button>
+                          <button className="btn ghost xs" title="Умная ссылка с маршрутизацией — для Hiddify и телефона" onClick={() => copy(subUrl(r.token, 'singbox'), notify)}>Hiddify</button>
+                          <button className="btn ghost xs" title="Зашифрованная ссылка — открывается только в приложении Dogma" onClick={() => copy(subUrl(r.token, 'enc'), notify)}>Dogma</button>
                           <button className="btn ghost xs" onClick={() => startEdit(r)}>Изменить</button>
                           <button className="btn ghost xs danger" onClick={() => onRevoke(r.id)}>Отозвать</button>
                         </>
@@ -475,7 +526,7 @@ function SubscriptionsTab({ token, notify }) {
                     </td>
                   </tr>
                   {editId === r.id && (
-                    <tr className="edit-row edit-row-open"><td colSpan={7}>
+                    <tr className="edit-row edit-row-open"><td colSpan={6}>
                       <div className="inline-edit">
                         <label className="field inline"><span className="field-label">Продлить на (дней)</span><input type="number" value={days} onChange={(e) => setDays(e.target.value)} /></label>
                         <label className="field inline"><span className="field-label">Лимит трафика, ГБ (пусто = ∞)</span><input type="number" value={limit} onChange={(e) => setLimit(e.target.value)} /></label>
@@ -525,20 +576,22 @@ function UsersTab({ token, notify }) {
   return (
     <div>
       <div className="toolbar">
-        <input className="search" placeholder="Поиск: логин, ФИО, email" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="search" placeholder="Поиск" value={q} onChange={(e) => setQ(e.target.value)} />
         <span className="dim">{filtered.length} из {rows.length}</span>
       </div>
       {filtered.length === 0 ? <p className="admin-msg">Ничего не найдено.</p> : (
         <div className="table-wrap">
           <table className="atable">
-            <thead><tr><th>Логин</th><th>ФИО</th><th>Email</th><th>Статус</th><th>Регистрация</th><th>Последний вход</th><th>Действия</th></tr></thead>
+            <thead><tr><th>Логин</th><th>Пользователь</th><th>Статус</th><th>Регистрация</th><th>Последний вход</th><th>Действия</th></tr></thead>
             <tbody>
               {filtered.map((u) => (
                 <Fragment key={u.username}>
                   <tr>
-                    <td className="mono">{u.username}</td>
-                    <td>{u.fullName || '—'}</td>
-                    <td>{u.email || '—'}</td>
+                    <td className="mono login-cell" title={u.username}>{u.username}</td>
+                    <td className="user-cell">
+                      <div>{u.fullName || '—'}</div>
+                      {u.email && <div className="cell-sub">{u.email}</div>}
+                    </td>
                     <td><span className={`badge ${u.blocked ? 'fail' : 'active'}`}>{u.blocked ? 'заблокирован' : 'активен'}</span></td>
                     <td className="dim">{fmtDate(u.createdAt)}</td>
                     <td className="dim">{u.lastLogin ? fmt(u.lastLogin) : '—'}</td>
@@ -549,7 +602,7 @@ function UsersTab({ token, notify }) {
                     </td>
                   </tr>
                   {routingFor === u.username && (
-                    <tr className="edit-row"><td colSpan={7}>
+                    <tr className="edit-row"><td colSpan={6}>
                       {!routing ? <span className="dim">Загрузка…</span> : <RoutingSummary p={routing} />}
                     </td></tr>
                   )}

@@ -27,6 +27,7 @@ export default function App() {
   const t = makeT(lang);
 
   const [auth, setAuth] = useState(null);
+  const [bootError, setBootError] = useState(false);
   const [loginView, setLoginView] = useState('login'); // login | register
   const [ssoAvailable, setSsoAvailable] = useState(false);
 
@@ -53,8 +54,21 @@ export default function App() {
 
   const fullName = auth && auth !== false ? auth.name : '';
 
+  // 401 — это «не авторизован». Любая другая ошибка (429, сеть) не должна
+  // выглядеть как выход из аккаунта, поэтому показываем отдельное состояние.
+  function loadMe() {
+    setBootError(false);
+    getMe()
+      .then((u) => setAuth(u || false))
+      .catch((err) => {
+        setAuth(false);
+        if (err instanceof ApiError && err.status === 401) return;
+        setBootError(true);
+      });
+  }
+
   useEffect(() => {
-    getMe().then((u) => setAuth(u || false)).catch(() => setAuth(false));
+    loadMe();
     getAuthConfig().then((c) => setSsoAvailable(!!c.sso)).catch(() => {});
   }, []);
 
@@ -243,16 +257,16 @@ export default function App() {
 
   return (
     <div className="page">
-      <div className="aura" aria-hidden="true" />
       <header className="topbar">
         <div className="brand">
+          <RouteGlyph />
           <span className="brand-mark">DOGMA</span>
           <span className="brand-tag">{t('brandTag')}</span>
         </div>
         <div className="topbar-right">
           {auth && auth !== false && (
             <button className="user-chip" onClick={onLogout} title={t('logout')}>
-              {auth.name} · {t('logout')}
+              <span className="user-name">{auth.name} · </span>{t('logout')}
             </button>
           )}
           <div className="lang" role="group" aria-label="Language">
@@ -268,79 +282,97 @@ export default function App() {
           <section className="panel"><div className="center"><div className="pulse" /><p className="lead" style={{ marginTop: 18 }}>{t('authLoading')}</p></div></section>
         )}
 
-        {auth === false && loginView === 'login' && (
+        {auth === false && bootError && (
           <section className="panel">
-            <h1 className="title" style={{ textAlign: 'center' }}>{t('signInTitle')}</h1>
-            <p className="lead" style={{ textAlign: 'center' }}>{t('signInLead')}</p>
-            <div className="guest-form">
-              <label className="field">
-                <span className="field-label">{t('username')}</span>
-                <input value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} placeholder={t('usernamePh')} autoFocus />
-              </label>
-              <label className="field">
-                <span className="field-label">{t('password')}</span>
-                <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && loginValid) onLogin(); }} />
-              </label>
-              {authErr && <p className="note err-text">{authErr}</p>}
-              <button className="btn primary" onClick={onLogin} disabled={!loginValid}>{t('signInBtn')}</button>
-              <button className="btn link" onClick={() => { setAuthErr(''); setLoginView('register'); }}>{t('toRegister')}</button>
-              {ssoAvailable && (
-                <button className="btn ghost btn-block" onClick={() => { window.location.href = loginUrl(); }}>{t('ssoBtn')}</button>
-              )}
-            </div>
+            <h1 className="title">{t('bootErrorTitle')}</h1>
+            <p className="lead">{t('bootErrorLead')}</p>
+            <button className="btn primary cta" onClick={loadMe}>{t('retry')}</button>
           </section>
         )}
 
-        {auth === false && loginView === 'register' && (
-          <section className="panel">
-            <h1 className="title" style={{ textAlign: 'center' }}>{t('regTitle')}</h1>
-            <p className="lead">{t('regLead')}</p>
-            <div className="guest-form">
-              <label className="field">
-                <span className="field-label">{t('lastName')}</span>
-                <input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder={t('lastNamePh')} autoFocus />
-              </label>
-              <div className="field-row">
-                <label className="field">
-                  <span className="field-label">{t('firstName')}</span>
-                  <input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder={t('firstNamePh')} />
-                </label>
-                <label className="field">
-                  <span className="field-label">{t('middleName')}</span>
-                  <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} placeholder={t('middleNamePh')} />
-                </label>
-              </div>
-              <label className="field">
-                <span className="field-label">{t('email')}</span>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('emailPh')} />
-              </label>
-              <div className="field-row">
-                <label className="field">
-                  <span className="field-label">{t('username')}</span>
-                  <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t('usernamePh')} />
-                </label>
-                <label className="field">
-                  <span className="field-label">{t('password')}</span>
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('passwordPh')} />
-                </label>
-              </div>
-              {authErr && <p className="note err-text">{authErr}</p>}
-              <button className="btn primary" onClick={onRegister} disabled={!regValid}>{t('registerBtn')}</button>
-              <button className="btn link" onClick={() => { setAuthErr(''); setLoginView('login'); }}>{t('toSignIn')}</button>
-              {ssoAvailable && (
-                <button className="btn ghost btn-block" onClick={() => { window.location.href = loginUrl(); }}>{t('ssoBtn')}</button>
+        {auth === false && !bootError && (
+          <div className="auth-split">
+            <aside className="auth-side">
+              <RouteDiagram t={t} />
+              <h2 className="auth-side-title">{t('authSideTitle')}</h2>
+              <p className="auth-side-lead">{t('authSideLead')}</p>
+            </aside>
+
+            <section className="panel auth-panel" key={loginView}>
+              {loginView === 'login' ? (
+                <>
+                  <h1 className="title">{t('signInTitle')}</h1>
+                  <p className="lead">{t('signInLead')}</p>
+                  <div className="guest-form">
+                    <label className="field">
+                      <span className="field-label">{t('username')}</span>
+                      <input value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} placeholder={t('usernamePh')} autoFocus />
+                    </label>
+                    <label className="field">
+                      <span className="field-label">{t('password')}</span>
+                      <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && loginValid) onLogin(); }} />
+                    </label>
+                    {authErr && <p className="note err-text">{authErr}</p>}
+                    <button className="btn primary" onClick={onLogin} disabled={!loginValid}>{t('signInBtn')}</button>
+                    {ssoAvailable && (
+                      <button className="btn ghost btn-block" onClick={() => { window.location.href = loginUrl(); }}>{t('ssoBtn')}</button>
+                    )}
+                    <button className="btn link" onClick={() => { setAuthErr(''); setLoginView('register'); }}>{t('toRegister')}</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h1 className="title">{t('regTitle')}</h1>
+                  <p className="lead">{t('regLead')}</p>
+                  <div className="guest-form">
+                    <label className="field">
+                      <span className="field-label">{t('lastName')}</span>
+                      <input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder={t('lastNamePh')} autoFocus />
+                    </label>
+                    <div className="field-row">
+                      <label className="field">
+                        <span className="field-label">{t('firstName')}</span>
+                        <input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder={t('firstNamePh')} />
+                      </label>
+                      <label className="field">
+                        <span className="field-label">{t('middleName')}</span>
+                        <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} placeholder={t('middleNamePh')} />
+                      </label>
+                    </div>
+                    <label className="field">
+                      <span className="field-label">{t('email')}</span>
+                      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('emailPh')} />
+                    </label>
+                    <div className="field-row">
+                      <label className="field">
+                        <span className="field-label">{t('username')}</span>
+                        <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t('usernamePh')} />
+                      </label>
+                      <label className="field">
+                        <span className="field-label">{t('password')}</span>
+                        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('passwordPh')} />
+                      </label>
+                    </div>
+                    {authErr && <p className="note err-text">{authErr}</p>}
+                    <button className="btn primary" onClick={onRegister} disabled={!regValid}>{t('registerBtn')}</button>
+                    {ssoAvailable && (
+                      <button className="btn ghost btn-block" onClick={() => { window.location.href = loginUrl(); }}>{t('ssoBtn')}</button>
+                    )}
+                    <button className="btn link" onClick={() => { setAuthErr(''); setLoginView('login'); }}>{t('toSignIn')}</button>
+                  </div>
+                </>
               )}
-            </div>
-          </section>
+            </section>
+          </div>
         )}
 
         {auth && auth !== false && (
-          <>
+          <div className="client">
             <ol className="rail" aria-label="progress">
               {t('steps').map((label, i) => (
                 <li key={label} className={i === step ? 'active' : i < step ? 'done' : ''}>
-                  <span className="rail-num">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="rail-num" aria-hidden="true" />
                   <span className="rail-label">{label}</span>
                 </li>
               ))}
@@ -348,13 +380,14 @@ export default function App() {
 
             <section className="panel" key={phase}>
               {phase === 'form' && (
-                <div className="center">
+                <div>
                   <h1 className="title">{t('vpnFormTitle')}</h1>
+                  <p className="lead">{t('formLead')}</p>
                   <p className="issued-to">
                     {t('vpnForName')} <strong>{fullName}</strong>
                   </p>
-                  {auth.kind === 'employee' && <p className="note" style={{ marginTop: 0, marginBottom: 18 }}>{t('corpNote')}</p>}
-                  <button className="btn primary" onClick={onCreateSubscription}>{t('getVpn')}</button>
+                  {auth.kind === 'employee' && <p className="note" style={{ marginTop: 0 }}>{t('corpNote')}</p>}
+                  <button className="btn primary cta" onClick={onCreateSubscription}>{t('getVpn')}</button>
                 </div>
               )}
 
@@ -397,7 +430,7 @@ export default function App() {
                   <h1 className="title">{t('routingStepTitle')}</h1>
                   <p className="lead">{t('routingStepLead')}</p>
 
-                  <span className="field-label">{t('fmtTitle')}</span>
+                  <h2 className="subhead" style={{ marginTop: 24 }}>{t('fmtTitle')}</h2>
                   <div className="fmt-list" role="radiogroup">
                     {[...(sub.secureSubscriptionUrl ? ['enc'] : []), 'singbox', 'sub', 'link'].map((f) => (
                       <label key={f} className={`fmt-opt${format === f ? ' on' : ''}`}>
@@ -432,7 +465,7 @@ export default function App() {
                         {t('readyForName')} <strong>{fullName}</strong>
                       </p>
                     </div>
-                    <Badge state="ok" big>{t('badgeOk')}</Badge>
+                    <span className="status"><span className="status-dot" />{t('subActive')}</span>
                   </div>
 
                   <div className="keybox">
@@ -446,8 +479,8 @@ export default function App() {
                   </div>
 
                   {qrDataUrl && (
-                    <div className="center" style={{ marginTop: 16 }}>
-                      <img src={qrDataUrl} alt="QR Code" style={{ borderRadius: 12, border: '1px solid #e6e8ec' }} />
+                    <div className="qr-block">
+                      <img src={qrDataUrl} alt={t('qrHint')} />
                       <p className="note">{t('qrHint')}</p>
                     </div>
                   )}
@@ -479,7 +512,7 @@ export default function App() {
                 </div>
               )}
             </section>
-          </>
+          </div>
         )}
       </main>
 
@@ -494,6 +527,43 @@ function describeError(err, t) {
     return err.message;
   }
   return t('networkError') + apiBase;
+}
+
+// Знак продукта: маршрут из двух узлов. Тот же мотив повторяется
+// на экране входа и в шаге прогресса — это подпись DOGMA.
+function RouteGlyph() {
+  return (
+    <svg className="brand-glyph" viewBox="0 0 24 12" aria-hidden="true">
+      <path d="M2 9h6l3-3h11" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="2" cy="9" r="1.6" fill="currentColor" />
+      <circle cx="22" cy="6" r="1.6" fill="var(--gold)" />
+    </svg>
+  );
+}
+
+// RU → EU: единственный «богатый» элемент на экране входа. Не декор,
+// а схема того, как устроен доступ: клиент → релей → выход.
+function RouteDiagram({ t }) {
+  return (
+    <figure className="route-card">
+      <div className="route-head">
+        <span className="route-title">{t('routeTitle')}</span>
+        <span className="route-path">RU → EU</span>
+      </div>
+      <svg className="route-diagram" viewBox="0 0 320 56" aria-hidden="true">
+        <line x1="16" y1="20" x2="160" y2="20" stroke="currentColor" strokeOpacity="0.3" strokeWidth="1" />
+        <line x1="160" y1="20" x2="304" y2="20" stroke="currentColor" strokeOpacity="0.3" strokeWidth="1" strokeDasharray="3 5" />
+        <circle cx="16" cy="20" r="4" fill="none" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1" />
+        <circle cx="160" cy="20" r="4" fill="none" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1" />
+        <circle cx="304" cy="20" r="8" fill="none" stroke="var(--gold)" strokeOpacity="0.3" strokeWidth="1" />
+        <circle cx="304" cy="20" r="4" fill="var(--gold)" />
+        <text x="16" y="44" textAnchor="middle" className="route-label">RU</text>
+        <text x="160" y="44" textAnchor="middle" className="route-label">RELAY</text>
+        <text x="304" y="44" textAnchor="middle" className="route-label">EU</text>
+      </svg>
+      <figcaption className="route-note">{t('routeNote')}</figcaption>
+    </figure>
+  );
 }
 
 function Badge({ state, big, children }) {

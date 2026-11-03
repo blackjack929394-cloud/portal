@@ -1,3 +1,9 @@
 node_modules/
 dist/
 .env
+
+# Локальный конфиг Vite с прокси на прод (не коммитим)
+vite.local.config.js
+
+# локальная страница предпросмотра мобильной вёрстки
+mobile-preview.html
