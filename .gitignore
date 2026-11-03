@@ -4,3 +4,14 @@ backups/
 
 # Локальные инструменты разработки (скиллы OpenCode и т.п.)
 .opencode/
+
+# Android-клиент
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/local.properties
+android/captures/
+*.apk
+*.aab
+android/app/libs/libbox.aar
