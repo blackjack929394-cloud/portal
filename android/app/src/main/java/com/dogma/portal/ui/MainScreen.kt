@@ -80,8 +80,6 @@ fun MainScreen(
                     t = t,
                     unread = state.chat.unread,
                     onTab = onTab,
-                    onCycleTheme = onCycleTheme,
-                    onSettings = { onTab(Tab.SETTINGS) },
                 )
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -151,8 +149,6 @@ private fun Sidebar(
     t: Strings,
     unread: Int,
     onTab: (Tab) -> Unit,
-    onCycleTheme: () -> Unit,
-    onSettings: () -> Unit,
 ) {
     val p = dogmaPalette()
     Column(
@@ -162,7 +158,7 @@ private fun Sidebar(
             .background(p.sideBg)
             .padding(horizontal = 14.dp, vertical = 26.dp),
     ) {
-        BrandBlock(logoSize = 64.dp, nameColor = Color.White, tagColor = Color(0xFF6F6F6F))
+        BrandBlock(logoSize = 64.dp, nameColor = Color.White)
         Spacer(Modifier.height(28.dp))
         Tab.entries.forEach { item ->
             SidebarItem(
@@ -173,11 +169,6 @@ private fun Sidebar(
                 onClick = { onTab(item) },
             )
             Spacer(Modifier.height(4.dp))
-        }
-        Spacer(Modifier.weight(1f))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            SideIcon(DogmaIconKind.SUN, onCycleTheme)
-            SideIcon(DogmaIconKind.GEAR, onSettings)
         }
     }
 }
@@ -213,20 +204,6 @@ private fun SidebarItem(
             modifier = Modifier.weight(1f),
         )
         if (unread > 0) ChatBadge(unread)
-    }
-}
-
-@Composable
-private fun SideIcon(icon: DogmaIconKind, onClick: () -> Unit) {
-    val p = dogmaPalette()
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(RoundedCornerShape(9.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        DogmaIcon(icon, Modifier.size(17.dp), tint = p.sideFg)
     }
 }
 

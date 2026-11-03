@@ -88,12 +88,6 @@ fun SettingsScreen(
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SettingRow(
-                    icon = DogmaIconKind.SHIELD,
-                    title = t["protocolRow"],
-                    subtitle = t["protocolRowHint"],
-                )
-                SettingRow(
-                    icon = DogmaIconKind.BOLT,
                     title = t["killSwitch"],
                     subtitle = t["killSwitchHint"],
                     trailing = {
@@ -101,7 +95,6 @@ fun SettingsScreen(
                     },
                 )
                 SettingRow(
-                    icon = DogmaIconKind.POWER,
                     title = t["autostart"],
                     subtitle = t["autostartHint"],
                     trailing = {
@@ -109,14 +102,12 @@ fun SettingsScreen(
                     },
                 )
                 SettingRow(
-                    icon = DogmaIconKind.GLOBE,
                     title = t["dnsRow"],
                     subtitle = dnsLabel(settings.dns),
                     onClick = { showDns = true },
                     showChevron = true,
                 )
                 SettingRow(
-                    icon = DogmaIconKind.KEY,
                     title = t["leakProtection"],
                     subtitle = t["leakHint"],
                     trailing = {
@@ -127,7 +118,6 @@ fun SettingsScreen(
                     },
                 )
                 SettingRow(
-                    icon = DogmaIconKind.SERVERS,
                     title = t["splitTunneling"],
                     subtitle = if (settings.splitTunneling.isBlank()) t["splitHint"] else settings.splitTunneling,
                     onClick = { splitOpen = !splitOpen },
@@ -165,14 +155,12 @@ fun SettingsScreen(
                     }
                 }
                 SettingRow(
-                    icon = DogmaIconKind.GLOBE,
                     title = t["language"],
                     subtitle = if (state.lang == Lang.RU) "Русский" else "English",
                     onClick = { showLanguage = true },
                     showChevron = true,
                 )
                 SettingRow(
-                    icon = DogmaIconKind.SUN,
                     title = t["themeRow"],
                     subtitle = when (settings.theme) {
                         ThemeMode.SYSTEM -> t["themeSystem"]
@@ -183,30 +171,18 @@ fun SettingsScreen(
                     showChevron = true,
                 )
                 SettingRow(
-                    icon = DogmaIconKind.GLOBE,
                     title = t["portalServer"],
                     subtitle = state.baseUrl,
                     onClick = onOpenServer,
                     showChevron = true,
                 )
-                SettingRow(
-                    icon = DogmaIconKind.SETTINGS,
-                    title = t["otherSettings"],
-                    subtitle = t["versionLabel"],
-                )
             }
 
             Spacer(Modifier.height(14.dp))
             Text(
-                text = t["applyNextConnection"],
+                text = t["versionLabel"],
                 color = p.muted,
-                fontSize = 12.sp,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = t["killSwitchNote"],
-                color = p.muted,
-                fontSize = 11.5.sp,
+                fontSize = 11.sp,
             )
         }
     }

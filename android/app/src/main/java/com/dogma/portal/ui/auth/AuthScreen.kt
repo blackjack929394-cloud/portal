@@ -31,6 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -74,7 +77,8 @@ fun AuthScreen(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(RoundedCornerShape(9.dp))
-                    .clickable(onClick = onOpenServer),
+                    .clickable(onClick = onOpenServer)
+                    .semantics { contentDescription = t["serverTitle"] },
                 contentAlignment = Alignment.Center,
             ) {
                 DogmaIcon(DogmaIconKind.GEAR, Modifier.size(19.dp), tint = p.authMuted)
@@ -92,7 +96,7 @@ fun AuthScreen(
             AuthCard(
                 modifier = Modifier.fillMaxWidth().widthIn(max = 390.dp),
             ) {
-                BrandBlock(logoSize = 84.dp, nameColor = p.authFg, tagColor = Color(0xFF6F6F6F))
+                BrandBlock(logoSize = 84.dp, nameColor = p.authFg)
 
                 when {
                     state.booting -> {
@@ -139,15 +143,6 @@ fun AuthScreen(
                         )
                     }
                 }
-
-                Spacer(Modifier.height(18.dp))
-                Text(
-                    t["authNote"],
-                    color = Color(0xFF5F5F5F),
-                    fontSize = 11.sp,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                )
             }
         }
     }

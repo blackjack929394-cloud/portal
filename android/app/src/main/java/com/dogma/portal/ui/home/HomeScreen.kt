@@ -155,20 +155,17 @@ fun HomeScreen(
                     Spacer(Modifier.height(18.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         InfoChip(
-                            icon = DogmaIconKind.GLOBE,
                             label = t["ipAddress"],
                             value = state.externalIp ?: "…",
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             InfoChip(
-                                icon = DogmaIconKind.SHIELD,
                                 label = t["protocol"],
                                 value = t["protocolValue"],
                                 modifier = Modifier.weight(1f),
                             )
                             InfoChip(
-                                icon = DogmaIconKind.CLOCK,
                                 label = t["connectionTime"],
                                 value = formatClock((now - vpn.connectedSince) / 1000),
                                 modifier = Modifier.weight(1f),
@@ -195,6 +192,9 @@ fun HomeScreen(
                         onOpenChat = onOpenChat,
                         onRefresh = onRefresh,
                     )
+                } else if (state.nodesLoading) {
+                    Spacer(Modifier.height(18.dp))
+                    Text(t["authLoading"], color = p.muted, fontSize = 13.sp)
                 }
 
                 if (state.selected != null) {
@@ -215,7 +215,6 @@ fun HomeScreen(
                         VpnState.CONNECTED -> OutlineButton(
                             text = t["disconnect"],
                             onClick = onDisconnect,
-                            icon = DogmaIconKind.POWER,
                         )
                         VpnState.CONNECTING -> OutlineButton(
                             text = t["cancelConnection"],
@@ -224,12 +223,10 @@ fun HomeScreen(
                         VpnState.ERROR -> PrimaryButton(
                             text = t["retry"],
                             onClick = onConnect,
-                            icon = DogmaIconKind.POWER,
                         )
                         VpnState.DISCONNECTED -> PrimaryButton(
                             text = t["connect"],
                             onClick = onConnect,
-                            icon = DogmaIconKind.POWER,
                         )
                     }
                 }
@@ -241,33 +238,27 @@ fun HomeScreen(
 
 @Composable
 private fun InfoChip(
-    icon: DogmaIconKind,
     label: String,
     value: String,
     modifier: Modifier = Modifier,
 ) {
     val p = dogmaPalette()
-    Row(
+    Column(
         modifier = modifier
             .background(p.card, RoundedCornerShape(13.dp))
             .border(1.dp, p.border, RoundedCornerShape(13.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        DogmaIcon(icon, Modifier.size(17.dp), tint = p.muted)
-        Spacer(Modifier.size(9.dp))
-        Column {
-            Text(label, color = p.muted, fontSize = 10.5.sp, maxLines = 1)
-            Spacer(Modifier.height(2.dp))
-            Text(
-                value,
-                color = p.fg,
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        Text(label, color = p.muted, fontSize = 10.5.sp, maxLines = 1)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            value,
+            color = p.fg,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -286,11 +277,11 @@ private fun GateCard(
     when {
         state.subLoading -> {
             title = t["authLoading"]
-            subtitle = t["serversLoading"]
+            subtitle = ""
         }
         state.hasToken && state.nodes.isEmpty() -> {
             title = t["noServersTitle"]
-            subtitle = state.nodesError ?: t["noServersSub"]
+            subtitle = t["noServersSub"]
         }
         status == "pending" -> {
             title = t["gatePendingTitle"]
@@ -368,19 +359,15 @@ private fun ServerPill(
             Spacer(Modifier.height(2.dp))
             Text(host, color = Color(0xFF9A9A9A), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            DogmaIcon(DogmaIconKind.SIGNAL, Modifier.size(13.dp), tint = Color(0xFFCFCFCF))
-            Spacer(Modifier.size(5.dp))
-            Text(
-                text = when {
-                    pingPending -> "…"
-                    ping != null -> "$ping ms"
-                    else -> "—"
-                },
-                color = Color(0xFFCFCFCF),
-                fontSize = 12.sp,
-            )
-        }
+        Text(
+            text = when {
+                pingPending -> "…"
+                ping != null -> "$ping ms"
+                else -> "—"
+            },
+            color = Color(0xFFCFCFCF),
+            fontSize = 12.sp,
+        )
         Spacer(Modifier.size(8.dp))
         DogmaIcon(DogmaIconKind.CHEVRON, Modifier.size(15.dp), tint = Color(0xFF9A9A9A))
     }

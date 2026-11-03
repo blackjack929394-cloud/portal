@@ -37,7 +37,6 @@ import com.dogma.portal.stats.summary
 import com.dogma.portal.ui.Strings
 import com.dogma.portal.ui.components.DogmaIcon
 import com.dogma.portal.ui.components.DogmaIconKind
-import com.dogma.portal.ui.components.Donut
 import com.dogma.portal.ui.components.PageTitle
 import com.dogma.portal.ui.components.RangeTabs
 import com.dogma.portal.ui.components.SpeedChart
@@ -67,14 +66,6 @@ fun StatsScreen(
         else -> StatsRange.TODAY
     }
     val summary = remember(state.stats, rangeKey) { state.stats.summary(range) }
-    val total = summary.up + summary.down
-    val budget = when (range) {
-        StatsRange.TODAY -> 20L
-        StatsRange.WEEK -> 140L
-        StatsRange.MONTH -> 600L
-        StatsRange.YEAR -> 7300L
-    } * 1024L * 1024L * 1024L
-    val fraction = min(1f, if (budget <= 0) 0f else (total.toDouble() / budget).toFloat())
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(vpn.state, vpn.connectedSince) {
@@ -90,12 +81,6 @@ fun StatsScreen(
         }
     }
 
-    val usedCaption = when (range) {
-        StatsRange.TODAY -> t["usedToday"]
-        StatsRange.WEEK -> t["usedWeek"]
-        StatsRange.MONTH -> t["usedMonth"]
-        StatsRange.YEAR -> t["usedYear"]
-    }
     val connectionSeconds = if (vpn.state == VpnState.CONNECTED && vpn.connectedSince > 0) {
         (now - vpn.connectedSince) / 1000
     } else {
@@ -118,31 +103,15 @@ fun StatsScreen(
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatCard(
-                    icon = DogmaIconKind.UP,
                     label = t["uploaded"],
                     value = formatBytes(summary.up, t),
                     modifier = Modifier.weight(1f),
                 )
                 StatCard(
-                    icon = DogmaIconKind.DOWN,
                     label = t["downloaded"],
                     value = formatBytes(summary.down, t),
                     modifier = Modifier.weight(1f),
                 )
-            }
-
-            Spacer(Modifier.height(14.dp))
-            Donut(fraction = fraction) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        formatBytes(total, t),
-                        color = p.fg,
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(3.dp))
-                    Text(usedCaption, color = p.muted, fontSize = 10.5.sp)
-                }
             }
 
             Spacer(Modifier.height(14.dp))
@@ -153,27 +122,13 @@ fun StatsScreen(
                     .border(1.dp, p.border, RoundedCornerShape(14.dp))
                     .padding(horizontal = 16.dp, vertical = 14.dp),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        t["speedTitle"],
-                        color = p.fg,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        LegendDot(p.fg)
-                        Text(t["legendDown"], color = p.muted, fontSize = 11.5.sp)
-                        LegendDot(p.muted)
-                        Text(t["legendUp"], color = p.muted, fontSize = 11.5.sp)
-                    }
-                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    t["speedTitle"],
+                    color = p.fg,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 Spacer(Modifier.height(10.dp))
                 SpeedChart(
                     points = state.speedHistory,
@@ -185,13 +140,11 @@ fun StatsScreen(
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatCard(
-                    icon = DogmaIconKind.CLOCK,
                     label = t["connectionTimeLabel"],
                     value = formatDuration(connectionSeconds, t),
                     modifier = Modifier.weight(1f),
                 )
                 StatCard(
-                    icon = DogmaIconKind.GLOBE,
                     label = t["lastServer"],
                     value = lastServer,
                     modifier = Modifier.weight(1f),
@@ -199,9 +152,4 @@ fun StatsScreen(
             }
         }
     }
-}
-
-@Composable
-private fun LegendDot(color: androidx.compose.ui.graphics.Color) {
-    Box(Modifier.size(8.dp).background(color, CircleShape))
 }

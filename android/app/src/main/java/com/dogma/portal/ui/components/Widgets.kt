@@ -57,6 +57,10 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -122,7 +126,6 @@ fun DogmaLogo(
 fun BrandBlock(
     logoSize: Dp = 64.dp,
     nameColor: Color = Color.White,
-    tagColor: Color = Color(0xFF6F6F6F),
     modifier: Modifier = Modifier,
 ) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -133,13 +136,6 @@ fun BrandBlock(
             color = nameColor,
             fontSize = 17.sp,
             fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.height(3.dp))
-        Text(
-            text = "SIMPLE. PRIVATE. FAST.",
-            color = tagColor,
-            fontSize = 8.5.sp,
-            letterSpacing = 1.6.sp,
         )
     }
 }
@@ -344,7 +340,6 @@ fun PrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     fillWidth: Boolean = true,
-    icon: DogmaIconKind? = null,
 ) {
     val p = dogmaPalette()
     val sizing = if (fillWidth) Modifier.fillMaxWidth() else Modifier.widthIn(min = 0.dp)
@@ -362,10 +357,6 @@ fun PrimaryButton(
         contentPadding = PaddingValues(horizontal = 20.dp),
         elevation = null,
     ) {
-        if (icon != null) {
-            DogmaIcon(icon, Modifier.size(16.dp), tint = p.accentFg)
-            Spacer(Modifier.width(8.dp))
-        }
         Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -377,7 +368,6 @@ fun OutlineButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     fillWidth: Boolean = true,
-    icon: DogmaIconKind? = null,
     danger: Boolean = false,
 ) {
     val p = dogmaPalette()
@@ -401,10 +391,6 @@ fun OutlineButton(
         contentPadding = PaddingValues(horizontal = 20.dp),
         elevation = null,
     ) {
-        if (icon != null) {
-            DogmaIcon(icon, Modifier.size(16.dp), tint = fg)
-            Spacer(Modifier.width(8.dp))
-        }
         Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -547,7 +533,6 @@ fun Caption(text: String, modifier: Modifier = Modifier) {
 
 @Composable
 fun SettingRow(
-    icon: DogmaIconKind,
     title: String,
     subtitle: String? = null,
     modifier: Modifier = Modifier,
@@ -562,19 +547,9 @@ fun SettingRow(
             .background(p.card, RoundedCornerShape(13.dp))
             .border(1.dp, p.border, RoundedCornerShape(13.dp))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 15.dp, vertical = 12.dp),
+            .padding(horizontal = 15.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .background(p.chipBg, RoundedCornerShape(9.dp))
-                .border(1.dp, p.border, RoundedCornerShape(9.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            DogmaIcon(icon, Modifier.size(17.dp))
-        }
-        Spacer(Modifier.width(13.dp))
         Column(Modifier.weight(1f)) {
             Text(title, color = p.fg, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
             if (!subtitle.isNullOrBlank()) {
@@ -591,7 +566,8 @@ fun SettingRow(
         if (trailing != null) {
             Spacer(Modifier.width(10.dp))
             trailing()
-        } else if (showChevron) {
+        }
+        if (showChevron) {
             Spacer(Modifier.width(6.dp))
             DogmaIcon(DogmaIconKind.CHEVRON, Modifier.size(15.dp), tint = p.muted)
         }
@@ -628,7 +604,6 @@ fun SearchBox(
         onValueChange = onValueChange,
         placeholder = placeholder,
         modifier = modifier,
-        leading = DogmaIconKind.SEARCH,
         imeAction = ImeAction.Search,
     )
 }
@@ -700,6 +675,7 @@ fun ServerRow(
     ping: Int?,
     pendingPing: Boolean,
     favorite: Boolean,
+    favoriteContentDescription: String,
     onSelect: () -> Unit,
     onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier,
@@ -710,7 +686,7 @@ fun ServerRow(
             .fillMaxWidth()
             .background(p.card, RoundedCornerShape(13.dp))
             .border(
-                width = if (selected) 1.dp else 1.dp,
+                width = 1.dp,
                 color = if (selected) p.fg else p.border,
                 shape = RoundedCornerShape(13.dp),
             )
@@ -738,25 +714,22 @@ fun ServerRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            DogmaIcon(DogmaIconKind.SIGNAL, Modifier.size(13.dp), tint = p.muted)
-            Spacer(Modifier.width(5.dp))
-            Text(
-                text = when {
-                    pendingPing -> "…"
-                    ping != null -> "$ping ms"
-                    else -> "—"
-                },
-                color = p.muted,
-                fontSize = 12.sp,
-            )
-        }
+        Text(
+            text = when {
+                pendingPing -> "…"
+                ping != null -> "$ping ms"
+                else -> "—"
+            },
+            color = p.muted,
+            fontSize = 12.sp,
+        )
         Spacer(Modifier.width(6.dp))
         Box(
             modifier = Modifier
                 .size(34.dp)
                 .clip(RoundedCornerShape(7.dp))
-                .clickable(onClick = onToggleFavorite),
+                .clickable(onClick = onToggleFavorite)
+                .semantics { contentDescription = favoriteContentDescription },
             contentAlignment = Alignment.Center,
         ) {
             DogmaIcon(
@@ -772,26 +745,20 @@ fun ServerRow(
 
 @Composable
 fun StatCard(
-    icon: DogmaIconKind,
     label: String,
     value: String,
     modifier: Modifier = Modifier,
 ) {
     val p = dogmaPalette()
-    Row(
+    Column(
         modifier = modifier
             .background(p.card, RoundedCornerShape(13.dp))
             .border(1.dp, p.border, RoundedCornerShape(13.dp))
             .padding(horizontal = 15.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        DogmaIcon(icon, Modifier.size(17.dp))
-        Spacer(Modifier.width(11.dp))
-        Column {
-            Text(label, color = p.muted, fontSize = 10.5.sp)
-            Spacer(Modifier.height(3.dp))
-            Text(value, color = p.fg, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-        }
+        Text(label, color = p.muted, fontSize = 10.5.sp)
+        Spacer(Modifier.height(3.dp))
+        Text(value, color = p.fg, fontSize = 17.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -831,38 +798,6 @@ fun RangeTabs(
 }
 
 @Composable
-fun Donut(
-    fraction: Float,
-    modifier: Modifier = Modifier,
-    center: @Composable BoxScope.() -> Unit,
-) {
-    val p = dogmaPalette()
-    Box(modifier.size(190.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val stroke = 15.dp.toPx()
-            val inset = stroke / 2f
-            drawCircle(
-                color = p.track,
-                radius = (size.minDimension - stroke) / 2f,
-                style = Stroke(stroke),
-            )
-            if (fraction > 0f) {
-                drawArc(
-                    color = p.fg,
-                    startAngle = -90f,
-                    sweepAngle = 360f * fraction.coerceIn(0f, 1f),
-                    useCenter = false,
-                    topLeft = Offset(inset, inset),
-                    size = Size(size.width - stroke, size.height - stroke),
-                    style = Stroke(stroke, cap = StrokeCap.Round),
-                )
-            }
-        }
-        center()
-    }
-}
-
-@Composable
 fun SpeedChart(
     points: List<SpeedPoint>,
     modifier: Modifier = Modifier,
@@ -874,10 +809,7 @@ fun SpeedChart(
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
-            for (i in 1..3) {
-                val y = h / 4f * i
-                drawLine(p.track, Offset(0f, y), Offset(w, y), 1f)
-            }
+            drawLine(p.track, Offset(0f, h - 1f), Offset(w, h - 1f), 1f)
             if (points.size >= 2) {
                 val maxValue = max(1024.0, points.maxOf { max(it.down, it.up) }) * 1.15
                 fun lineFor(values: List<Double>, color: Color, width: Float) {
@@ -891,6 +823,21 @@ fun SpeedChart(
                 }
                 lineFor(points.map { it.down }, p.fg, 1.8.dp.toPx())
                 lineFor(points.map { it.up }, p.muted, 1.4.dp.toPx())
+
+                // Подписи серий прямо у последних точек вместо легенды.
+                val last = points.lastIndex
+                val endX = ((last / 59f) * w).coerceAtMost(w - 14.dp.toPx())
+                val paint = android.graphics.Paint().apply {
+                    isAntiAlias = true
+                    textSize = 11.sp.toPx()
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                }
+                val lastDownY = h - (points.last().down / maxValue).toFloat() * (h - 8f) - 4f
+                val lastUpY = h - (points.last().up / maxValue).toFloat() * (h - 8f) - 4f
+                paint.color = p.fg.toArgb()
+                drawContext.canvas.nativeCanvas.drawText("↓", endX, lastDownY.coerceIn(12.dp.toPx(), h - 4.dp.toPx()), paint)
+                paint.color = p.muted.toArgb()
+                drawContext.canvas.nativeCanvas.drawText("↑", endX, lastUpY.coerceIn(12.dp.toPx(), h - 4.dp.toPx()), paint)
             }
         }
         if (points.size < 2 && (emptyText.isNotBlank() || collectingText.isNotBlank())) {

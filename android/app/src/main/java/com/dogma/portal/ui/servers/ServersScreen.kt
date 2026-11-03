@@ -80,7 +80,7 @@ fun ServersScreen(
 
         if (favorites.isNotEmpty()) {
             item {
-                SectionCaption(DogmaIconKind.STAR, t["favorites"])
+                SectionCaption(t["favorites"])
             }
             items(favorites, key = { "fav-" + it.host + it.name }) { node ->
                 ServerRow(
@@ -89,6 +89,7 @@ fun ServersScreen(
                     ping = state.pings[node.host],
                     pendingPing = !state.pings.containsKey(node.host),
                     favorite = true,
+                    favoriteContentDescription = t["favoriteRemove"],
                     onSelect = { onSelectNode(node) },
                     onToggleFavorite = { onToggleFavorite(node.name) },
                 )
@@ -96,7 +97,7 @@ fun ServersScreen(
         }
 
         item {
-            SectionCaption(DogmaIconKind.SERVERS, t["allServers"])
+            SectionCaption(t["allServers"])
         }
 
         if (state.nodesLoading && state.nodes.isEmpty()) {
@@ -125,6 +126,11 @@ fun ServersScreen(
                     ping = state.pings[node.host],
                     pendingPing = !state.pings.containsKey(node.host),
                     favorite = favoriteNames.contains(node.name),
+                    favoriteContentDescription = if (favoriteNames.contains(node.name)) {
+                        t["favoriteRemove"]
+                    } else {
+                        t["favoriteAdd"]
+                    },
                     onSelect = { onSelectNode(node) },
                     onToggleFavorite = { onToggleFavorite(node.name) },
                 )
@@ -134,14 +140,9 @@ fun ServersScreen(
 }
 
 @Composable
-private fun SectionCaption(icon: DogmaIconKind, text: String) {
-    val p = dogmaPalette()
-    androidx.compose.foundation.layout.Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-    ) {
-        DogmaIcon(icon, Modifier.size(13.dp), tint = p.muted)
-        Caption(text, Modifier.weight(1f))
-    }
+private fun SectionCaption(text: String) {
+    Caption(
+        text,
+        Modifier.padding(top = 12.dp, bottom = 2.dp),
+    )
 }
