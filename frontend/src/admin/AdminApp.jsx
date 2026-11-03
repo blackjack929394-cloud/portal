@@ -1,58 +1,182 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback, Fragment } from 'react';
 import {
   verifyToken,
-  listPasswords,
-  getPassword,
-  listGuests,
-  listEmployees,
   listNodes,
   createNode,
+  updateNode,
   deleteNode,
   toggleNode,
   deployNode,
-  getDeployStatus,
   redeployNode,
   listSubscriptions,
+  updateSubscription,
+  listPending,
+  approveSubscription,
+  denySubscription,
   revokeSubscription,
+  deleteSubscription,
+  listChats,
+  getChatMessages,
+  sendChatMessage,
+  listUsers,
+  getUserRouting,
+  deleteUser,
+  setUserBlocked,
   getStats,
 } from './adminApi.js';
 
 const TABS = [
-  { id: 'passwords', label: 'Пароли' },
-  { id: 'guests', label: 'Гости' },
-  { id: 'employees', label: 'Сотрудники' },
+  { id: 'overview', label: 'Обзор' },
   { id: 'nodes', label: 'Ноды' },
   { id: 'subscriptions', label: 'Подписки' },
-  { id: 'stats', label: 'Статистика' },
+  { id: 'users', label: 'Пользователи' },
+  { id: 'requests', label: 'Заявки' },
+  { id: 'chat', label: 'Чат' },
 ];
 
+const REFRESH_MS = 5000;
+const ADMIN_TOKEN_KEY = 'dogma_admin_token';
+
+function usePolling(loader, deps = [], intervalMs = REFRESH_MS) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(true);
+  const timer = useRef(null);
+  const alive = useRef(true);
+
+  async function reload() {
+    try {
+      const d = await loader();
+      if (!alive.current) return;
+      setData(d);
+      setErr('');
+    } catch (e) {
+      if (!alive.current) return;
+      setErr(e.message);
+    } finally {
+      if (alive.current) setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    alive.current = true;
+    setLoading(true);
+    reload();
+    if (intervalMs) timer.current = setInterval(reload, intervalMs);
+    return () => {
+      alive.current = false;
+      if (timer.current) clearInterval(timer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  return { data, err, loading, reload };
+}
+
+// Короткие всплывающие уведомления (вместо alert).
+function useToasts() {
+  const [toasts, setToasts] = useState([]);
+  const notify = useCallback((message, type = 'ok') => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts((t) => [...t, { id, message, type }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
+  }, []);
+  return { toasts, notify };
+}
+
+function fmt(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString();
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString();
+}
+
+function copy(text, notify) {
+  const done = () => notify && notify('Скопировано');
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+function fallbackCopy(text, done) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    done && done();
+  } catch { /* ignore */ }
+}
+
+const subUrl = (token, format) => `${window.location.origin}/api/v1/sub/${token}${format ? `?format=${format}` : ''}`;
+
 export default function AdminApp() {
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(() => {
+    try { return localStorage.getItem(ADMIN_TOKEN_KEY) || ''; } catch { return ''; }
+  });
   const [authed, setAuthed] = useState(false);
-  const [vaultOn, setVaultOn] = useState(true);
+  const [checking, setChecking] = useState(true);
   const [loginErr, setLoginErr] = useState('');
-  const [tab, setTab] = useState('nodes');
+  const [tab, setTab] = useState('overview');
+  const { toasts, notify } = useToasts();
+
+  useEffect(() => {
+    if (!token) { setChecking(false); return; }
+    verifyToken(token)
+      .then(() => setAuthed(true))
+      .catch(() => { try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch { /* ignore */ } })
+      .finally(() => setChecking(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const { data: pendingRows } = usePolling(
+    () => (authed && token ? listPending(token) : Promise.resolve([])),
+    [token, authed],
+  );
+  const pendingCount = Array.isArray(pendingRows) ? pendingRows.length : 0;
+
+  const { data: chatRows } = usePolling(
+    () => (authed && token ? listChats(token) : Promise.resolve([])),
+    [token, authed],
+  );
+  const chatUnread = Array.isArray(chatRows) ? chatRows.reduce((n, c) => n + (c.unread || 0), 0) : 0;
+
+  const TAB_BADGE = { requests: pendingCount, chat: chatUnread };
 
   async function onLogin() {
     setLoginErr('');
     try {
-      const s = await verifyToken(token);
-      setVaultOn(s.vaultEnabled);
+      await verifyToken(token);
+      try { localStorage.setItem(ADMIN_TOKEN_KEY, token); } catch { /* ignore */ }
       setAuthed(true);
     } catch (err) {
       setLoginErr(err.status === 401 ? 'Неверный токен' : err.message);
     }
   }
 
+  function onLogout() {
+    try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch { /* ignore */ }
+    setAuthed(false); setToken('');
+  }
+
+  if (checking) {
+    return (
+      <div className="page"><div className="aura" aria-hidden="true" />
+        <main className="stage"><section className="panel"><div className="center"><div className="pulse" /></div></section></main>
+      </div>
+    );
+  }
+
   if (!authed) {
     return (
-      <div className="page">
-        <div className="aura" aria-hidden="true" />
+      <div className="page"><div className="aura" aria-hidden="true" />
         <header className="topbar">
-          <div className="brand">
-            <span className="brand-mark">DOGMA</span>
-            <span className="brand-tag">Администрирование</span>
-          </div>
+          <div className="brand"><span className="brand-mark">DOGMA</span><span className="brand-tag">Администрирование</span></div>
         </header>
         <main className="stage">
           <section className="panel">
@@ -60,13 +184,8 @@ export default function AdminApp() {
             <p className="lead" style={{ textAlign: 'center' }}>Введите admin-токен.</p>
             <label className="field">
               <span className="field-label">Admin token</span>
-              <input
-                type="password"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && onLogin()}
-                autoFocus
-              />
+              <input type="password" value={token} onChange={(e) => setToken(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && onLogin()} autoFocus />
             </label>
             {loginErr && <p className="note err-text">{loginErr}</p>}
             <button className="btn primary" onClick={onLogin} disabled={!token}>Войти</button>
@@ -77,14 +196,13 @@ export default function AdminApp() {
   }
 
   return (
-    <div className="page">
-      <div className="aura" aria-hidden="true" />
+    <div className="page"><div className="aura" aria-hidden="true" />
       <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">DOGMA</span>
-          <span className="brand-tag">Администрирование</span>
+        <div className="brand"><span className="brand-mark">DOGMA</span><span className="brand-tag">Администрирование</span></div>
+        <div className="topbar-right">
+          <span className="live-dot" title="Данные обновляются автоматически">● live</span>
+          <button className="user-chip" onClick={onLogout}>Выйти</button>
         </div>
-        <button className="user-chip" onClick={() => { setAuthed(false); setToken(''); }}>Выйти</button>
       </header>
 
       <main className="admin-main">
@@ -92,216 +210,170 @@ export default function AdminApp() {
           {TABS.map((tb) => (
             <button key={tb.id} className={tab === tb.id ? 'tab on' : 'tab'} onClick={() => setTab(tb.id)}>
               {tb.label}
+              {TAB_BADGE[tb.id] > 0 && <span className="badge pending" style={{ marginLeft: 8 }}>{TAB_BADGE[tb.id]}</span>}
             </button>
           ))}
         </nav>
 
-        {tab === 'passwords' && <PasswordsTab token={token} vaultOn={vaultOn} />}
-        {tab === 'guests' && <DirectoryTab token={token} loader={listGuests} cols={['fullName', 'email', 'createdAt']} headers={['ФИО', 'Email', 'Создан']} />}
-        {tab === 'employees' && <DirectoryTab token={token} loader={listEmployees} cols={['fullName', 'email', 'createdAt']} headers={['ФИО', 'Email', 'Создан']} />}
-        {tab === 'nodes' && <NodesTab token={token} />}
-        {tab === 'subscriptions' && <SubscriptionsTab token={token} />}
-        {tab === 'stats' && <StatsTab token={token} />}
+        {tab === 'overview' && <OverviewTab token={token} pendingCount={pendingCount} chatUnread={chatUnread} goTo={setTab} />}
+        {tab === 'nodes' && <NodesTab token={token} notify={notify} />}
+        {tab === 'subscriptions' && <SubscriptionsTab token={token} notify={notify} />}
+        {tab === 'users' && <UsersTab token={token} notify={notify} />}
+        {tab === 'requests' && <PendingTab token={token} notify={notify} />}
+        {tab === 'chat' && <ChatTab token={token} />}
       </main>
+
+      <div className="toast-host">
+        {toasts.map((t) => <div key={t.id} className={`toast ${t.type}`}>{t.message}</div>)}
+      </div>
     </div>
   );
 }
 
-function PasswordsTab({ token, vaultOn }) {
-  const [rows, setRows] = useState(null);
-  const [err, setErr] = useState('');
-  const [open, setOpen] = useState({});
-  const [copied, setCopied] = useState('');
+// ── Обзор ────────────────────────────────────────────────────────────────────
+function OverviewTab({ token, pendingCount, chatUnread, goTo }) {
+  const { data: stats } = usePolling(() => getStats(token), [token]);
+  const { data: users } = usePolling(() => listUsers(token), [token], 10000);
+  const { data: subs } = usePolling(() => listSubscriptions(token), [token]);
 
-  useEffect(() => {
-    if (!vaultOn) { setErr('Хранилище паролей выключено (нет ADMIN_VAULT_KEY).'); setRows([]); return; }
-    listPasswords(token).then(setRows).catch((e) => { setErr(e.message); setRows([]); });
-  }, [token, vaultOn]);
+  const usersTotal = Array.isArray(users) ? users.length : null;
+  const usersBlocked = Array.isArray(users) ? users.filter((u) => u.blocked).length : 0;
+  const subsActive = Array.isArray(subs) ? subs.filter((s) => (s.effectiveStatus || s.status) === 'active').length : 0;
 
-  async function reveal(id) {
-    if (open[id]) { setOpen((o) => ({ ...o, [id]: undefined })); return; }
-    try {
-      const entry = await getPassword(token, id);
-      setOpen((o) => ({ ...o, [id]: entry.password }));
-    } catch (e) {
-      setErr(e.message);
-    }
-  }
-
-  function copy(pw, id) {
-    navigator.clipboard?.writeText(pw);
-    setCopied(id);
-    setTimeout(() => setCopied(''), 1500);
-  }
-
-  if (err) return <p className="admin-msg err-text">{err}</p>;
-  if (!rows) return <p className="admin-msg">Загрузка…</p>;
-  if (rows.length === 0) return <p className="admin-msg">Пока нет выданных паролей.</p>;
+  const cards = [
+    { label: 'Ноды', value: stats ? `${stats.activeNodes}/${stats.totalNodes}` : '…', hint: 'активны / всего', to: 'nodes' },
+    { label: 'Подписки', value: stats ? `${subsActive}/${stats.totalSubscriptions}` : '…', hint: 'активны / всего', to: 'subscriptions' },
+    { label: 'Пользователи', value: usersTotal ?? '…', hint: usersBlocked ? `${usersBlocked} заблокировано` : 'все активны', to: 'users' },
+    { label: 'Заявки', value: pendingCount, hint: 'ждут одобрения', to: 'requests', warn: pendingCount > 0 },
+    { label: 'Непрочитанные', value: chatUnread, hint: 'в чате', to: 'chat', warn: chatUnread > 0 },
+  ];
 
   return (
-    <div className="table-wrap">
-      <table className="atable">
-        <thead>
-          <tr><th>ФИО</th><th>Email</th><th>Файл</th><th>Создан</th><th>Пароль</th></tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.requestId}>
-              <td>{r.fullName}</td>
-              <td>{r.email || '—'}</td>
-              <td className="mono">{r.fileName}</td>
-              <td className="dim">{fmt(r.createdAt)}</td>
-              <td>
-                {open[r.requestId] ? (
-                  <span className="pw-row">
-                    <code className="key sm">{open[r.requestId]}</code>
-                    <button className="btn ghost xs" onClick={() => copy(open[r.requestId], r.requestId)}>
-                      {copied === r.requestId ? 'OK' : 'Копир.'}
-                    </button>
-                    <button className="btn ghost xs" onClick={() => reveal(r.requestId)}>Скрыть</button>
-                  </span>
-                ) : (
-                  <button className="btn ghost xs" onClick={() => reveal(r.requestId)}>Показать</button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="cards">
+      {cards.map((c) => (
+        <button key={c.label} className={`card${c.warn ? ' warn' : ''}`} onClick={() => goTo(c.to)}>
+          <div className="card-value">{c.value}</div>
+          <div className="card-label">{c.label}</div>
+          <div className="card-hint">{c.hint}</div>
+        </button>
+      ))}
     </div>
   );
 }
 
-function DirectoryTab({ token, loader, cols, headers }) {
-  const [rows, setRows] = useState(null);
-  const [err, setErr] = useState('');
+// ── Ноды ─────────────────────────────────────────────────────────────────────
+const EMPTY_NODE = { name: '', host: '', port: 443, protocol: 'hysteria2', kind: 'hysteria2', region: '', provider: '', sshHost: '', sshPort: 22, sshUser: 'root', sshKey: '' };
 
-  useEffect(() => {
-    loader(token).then(setRows).catch((e) => { setErr(e.message); setRows([]); });
-  }, [token, loader]);
-
-  if (err) return <p className="admin-msg err-text">{err}</p>;
-  if (!rows) return <p className="admin-msg">Загрузка…</p>;
-  if (rows.length === 0) return <p className="admin-msg">Записей пока нет.</p>;
-
-  return (
-    <div className="table-wrap">
-      <table className="atable">
-        <thead><tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr></thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.email || r.sub || i}>
-              {cols.map((c) => <td key={c} className={c === 'createdAt' ? 'dim' : ''}>{c === 'createdAt' ? fmt(r[c]) : (r[c] || '—')}</td>)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function NodesTab({ token }) {
-  const [rows, setRows] = useState(null);
-  const [err, setErr] = useState('');
-  const [form, setForm] = useState({
-    name: '', host: '', port: 443, protocol: 'hysteria2', kind: 'hysteria2', region: '', provider: '',
-    sshHost: '', sshPort: 22, sshUser: 'root', sshKey: '',
-  });
-
-  async function load() {
-    try {
-      const data = await listNodes(token);
-      setRows(data);
-    } catch (e) { setErr(e.message); setRows([]); }
-  }
-
-  useEffect(() => { load(); }, [token]);
+function NodesTab({ token, notify }) {
+  const { data: rows, err, reload } = usePolling(() => listNodes(token), [token]);
+  const [form, setForm] = useState(EMPTY_NODE);
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [edit, setEdit] = useState({});
 
   async function onCreate() {
     if (!form.name || !form.host) return;
     try {
       await createNode(token, { ...form, sshHost: form.sshHost || form.host });
-      setForm({ name: '', host: '', port: 443, protocol: 'hysteria2', kind: 'hysteria2', region: '', provider: '', sshHost: '', sshPort: 22, sshUser: 'root', sshKey: '' });
-      load();
-    } catch (e) { setErr(e.message); }
+      setForm(EMPTY_NODE); setShowForm(false); reload(); notify('Нода добавлена');
+    } catch (e) { notify(e.message, 'err'); }
   }
 
-  async function onDelete(id) {
-    if (!confirm('Удалить ноду?')) return;
-    try { await deleteNode(token, id); load(); } catch (e) { setErr(e.message); }
+  function startEdit(r) {
+    setEditId(r.id);
+    setEdit({ name: r.name, host: r.host, port: r.port, region: r.region || '', provider: r.provider || '' });
   }
 
-  async function onToggle(id) {
-    try { await toggleNode(token, id); load(); } catch (e) { setErr(e.message); }
+  async function saveEdit() {
+    try { await updateNode(token, editId, edit); setEditId(null); reload(); notify('Сохранено'); }
+    catch (e) { notify(e.message, 'err'); }
   }
 
-  async function onDeploy(id) {
-    try { await deployNode(token, id); load(); } catch (e) { setErr(e.message); }
-  }
+  const act = (fn, msg, confirmMsg) => async (id) => {
+    if (confirmMsg && !confirm(confirmMsg)) return;
+    try { await fn(token, id); reload(); if (msg) notify(msg); } catch (e) { notify(e.message, 'err'); }
+  };
+  const onDelete = act(deleteNode, 'Нода удалена', 'Удалить ноду?');
+  const onToggle = act(toggleNode);
+  const onDeploy = act(deployNode, 'Деплой запущен');
+  const onRedeploy = act(redeployNode, 'Переразвёртывание запущено', 'Переразвернуть ноду?');
 
-  async function onRedeploy(id) {
-    if (!confirm('Переразвернуть ноду?')) return;
-    try { await redeployNode(token, id); load(); } catch (e) { setErr(e.message); }
-  }
-
-  if (err) return <p className="admin-msg err-text">{err}</p>;
+  if (err && !rows) return <p className="admin-msg err-text">{err}</p>;
   if (!rows) return <p className="admin-msg">Загрузка…</p>;
 
   return (
     <div>
-      <div className="panel" style={{ marginBottom: 20 }}>
-        <h3 className="subhead">Добавить ноду</h3>
-        <div className="field-row">
-          <label className="field"><span className="field-label">Имя</span><input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} /></label>
-          <label className="field"><span className="field-label">Хост (публичный)</span><input value={form.host} onChange={(e) => setForm(f => ({ ...f, host: e.target.value }))} /></label>
-          <label className="field"><span className="field-label">Порт клиентов</span><input type="number" value={form.port} onChange={(e) => setForm(f => ({ ...f, port: parseInt(e.target.value) || 443 }))} /></label>
-          <label className="field"><span className="field-label">Тип</span>
-            <select value={form.kind} onChange={(e) => setForm(f => ({ ...f, kind: e.target.value, protocol: e.target.value }))}>
-              <option value="hysteria2">Hysteria2</option>
-              <option value="sing-box">sing-box</option>
-            </select>
-          </label>
-        </div>
-        <div className="field-row" style={{ marginTop: 8 }}>
-          <label className="field"><span className="field-label">Регион</span><input value={form.region} onChange={(e) => setForm(f => ({ ...f, region: e.target.value }))} /></label>
-          <label className="field"><span className="field-label">Провайдер</span><input value={form.provider} onChange={(e) => setForm(f => ({ ...f, provider: e.target.value }))} /></label>
-          <label className="field"><span className="field-label">SSH хост</span><input value={form.sshHost} placeholder={form.host} onChange={(e) => setForm(f => ({ ...f, sshHost: e.target.value }))} /></label>
-          <label className="field"><span className="field-label">SSH порт</span><input type="number" value={form.sshPort} onChange={(e) => setForm(f => ({ ...f, sshPort: parseInt(e.target.value) || 22 }))} /></label>
-        </div>
-        <div className="field-row" style={{ marginTop: 8 }}>
-          <label className="field" style={{ flex: 1 }}><span className="field-label">SSH пользователь</span><input value={form.sshUser} onChange={(e) => setForm(f => ({ ...f, sshUser: e.target.value }))} /></label>
-          <label className="field" style={{ flex: 3 }}><span className="field-label">Приватный SSH-ключ</span><textarea rows={3} value={form.sshKey} onChange={(e) => setForm(f => ({ ...f, sshKey: e.target.value }))} placeholder="-----BEGIN OPENSSH PRIVATE KEY----- ..." /></label>
-          <button className="btn primary" onClick={onCreate} disabled={!form.name || !form.host}>Добавить</button>
-        </div>
+      <div className="toolbar">
+        <button className="btn primary sm" onClick={() => setShowForm((s) => !s)}>{showForm ? 'Скрыть форму' : '+ Добавить ноду'}</button>
+        <span className="dim">Всего: {rows.length}</span>
       </div>
+
+      {showForm && (
+        <div className="panel" style={{ marginBottom: 20 }}>
+          <h3 className="subhead">Новая нода (европейская выходная точка)</h3>
+          <div className="field-row">
+            <label className="field"><span className="field-label">Имя</span><input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} /></label>
+            <label className="field"><span className="field-label">Хост (публичный)</span><input value={form.host} onChange={(e) => setForm(f => ({ ...f, host: e.target.value }))} /></label>
+            <label className="field"><span className="field-label">Порт</span><input type="number" value={form.port} onChange={(e) => setForm(f => ({ ...f, port: parseInt(e.target.value) || 443 }))} /></label>
+            <label className="field"><span className="field-label">Тип</span>
+              <select value={form.kind} onChange={(e) => setForm(f => ({ ...f, kind: e.target.value, protocol: e.target.value }))}>
+                <option value="hysteria2">Hysteria2</option><option value="vless">VLESS</option>
+                <option value="amneziawg">AmneziaWG</option><option value="sing-box">sing-box</option>
+              </select>
+            </label>
+          </div>
+          <div className="field-row" style={{ marginTop: 8 }}>
+            <label className="field"><span className="field-label">Регион</span><input value={form.region} onChange={(e) => setForm(f => ({ ...f, region: e.target.value }))} /></label>
+            <label className="field"><span className="field-label">Провайдер</span><input value={form.provider} onChange={(e) => setForm(f => ({ ...f, provider: e.target.value }))} /></label>
+            <label className="field"><span className="field-label">SSH хост</span><input value={form.sshHost} placeholder={form.host} onChange={(e) => setForm(f => ({ ...f, sshHost: e.target.value }))} /></label>
+            <label className="field"><span className="field-label">SSH порт</span><input type="number" value={form.sshPort} onChange={(e) => setForm(f => ({ ...f, sshPort: parseInt(e.target.value) || 22 }))} /></label>
+          </div>
+          <div className="field-row" style={{ marginTop: 8 }}>
+            <label className="field" style={{ flex: 1 }}><span className="field-label">SSH пользователь</span><input value={form.sshUser} onChange={(e) => setForm(f => ({ ...f, sshUser: e.target.value }))} /></label>
+            <label className="field" style={{ flex: 3 }}><span className="field-label">Приватный SSH-ключ</span><textarea rows={3} value={form.sshKey} onChange={(e) => setForm(f => ({ ...f, sshKey: e.target.value }))} placeholder="-----BEGIN OPENSSH PRIVATE KEY----- ..." /></label>
+            <button className="btn primary" onClick={onCreate} disabled={!form.name || !form.host}>Добавить</button>
+          </div>
+        </div>
+      )}
 
       {rows.length === 0 ? <p className="admin-msg">Нод пока нет.</p> : (
         <div className="table-wrap">
           <table className="atable">
             <thead><tr><th>Имя</th><th>Хост</th><th>Порт</th><th>Тип</th><th>Регион</th><th>Статус</th><th>Деплой</th><th>Действия</th></tr></thead>
             <tbody>
-              {rows.map((r) => (
+              {rows.map((r) => editId === r.id ? (
+                <tr key={r.id} className="edit-row">
+                  <td><input value={edit.name} onChange={(e) => setEdit(x => ({ ...x, name: e.target.value }))} /></td>
+                  <td><input value={edit.host} onChange={(e) => setEdit(x => ({ ...x, host: e.target.value }))} /></td>
+                  <td><input type="number" style={{ width: 70 }} value={edit.port} onChange={(e) => setEdit(x => ({ ...x, port: parseInt(e.target.value) || r.port }))} /></td>
+                  <td>{r.kind}</td>
+                  <td><input value={edit.region} onChange={(e) => setEdit(x => ({ ...x, region: e.target.value }))} /></td>
+                  <td colSpan={2} className="dim">Провайдер: <input value={edit.provider} onChange={(e) => setEdit(x => ({ ...x, provider: e.target.value }))} /></td>
+                  <td><button className="btn primary xs" onClick={saveEdit}>Сохранить</button><button className="btn ghost xs" onClick={() => setEditId(null)}>Отмена</button></td>
+                </tr>
+              ) : (
                 <tr key={r.id}>
                   <td>{r.name}</td>
-                  <td className="mono">{r.host}</td>
+                  <td className="mono">{r.host} <button className="linkbtn" title="Копировать хост" onClick={() => copy(r.host, notify)}>копир.</button></td>
                   <td>{r.port}</td>
                   <td>{r.kind}</td>
                   <td>{r.region || '—'}</td>
-                  <td><span className={`badge ${r.status}`}>{r.status}</span></td>
+                  <td><span className={`badge ${r.effectiveStatus || r.status}`}>{r.effectiveStatus || r.status}</span></td>
                   <td>
                     <span className={`badge ${r.deploymentStatus || 'pending'}`}>{r.deploymentStatus || 'pending'}</span>
                     {r.deploymentError && <div className="note err-text" title={r.deploymentError}>{r.deploymentError.slice(0, 40)}…</div>}
                     {r.wgTunnelIp && <div className="dim mono">WG: {r.wgTunnelIp}</div>}
                   </td>
-                  <td>
-                    <button className="btn ghost xs" onClick={() => onToggle(r.id)}>{r.status === 'active' ? 'Блокировать' : 'Активировать'}</button>
+                  <td className="row-actions">
+                    <button className="btn ghost xs" onClick={() => startEdit(r)}>Изменить</button>
+                    <button className="btn ghost xs" onClick={() => onToggle(r.id)}>{(r.effectiveStatus || r.status) === 'active' ? 'Блок' : 'Актив'}</button>
                     {r.kind === 'hysteria2' && (
                       <>
-                        <button className="btn ghost xs" onClick={() => onDeploy(r.id)} disabled={r.deploymentStatus === 'deploying'}>Деплоить</button>
+                        <button className="btn ghost xs" onClick={() => onDeploy(r.id)} disabled={r.deploymentStatus === 'deploying'}>Деплой</button>
                         <button className="btn ghost xs" onClick={() => onRedeploy(r.id)} disabled={r.deploymentStatus === 'deploying'}>Переразвернуть</button>
                       </>
                     )}
-                    <button className="btn ghost xs" onClick={() => onDelete(r.id)}>Удалить</button>
+                    <button className="btn ghost xs danger" onClick={() => onDelete(r.id)}>Удалить</button>
                   </td>
                 </tr>
               ))}
@@ -313,79 +385,302 @@ function NodesTab({ token }) {
   );
 }
 
-function SubscriptionsTab({ token }) {
-  const [rows, setRows] = useState(null);
-  const [err, setErr] = useState('');
+// ── Подписки ─────────────────────────────────────────────────────────────────
+const STATUS_FILTERS = [
+  { id: 'all', label: 'Все' },
+  { id: 'active', label: 'Активные' },
+  { id: 'pending', label: 'Ожидают' },
+  { id: 'revoked', label: 'Отозванные' },
+  { id: 'expired', label: 'Просроченные' },
+  { id: 'exhausted', label: 'Лимит трафика' },
+];
 
-  async function load() {
-    try {
-      const data = await listSubscriptions(token);
-      setRows(data);
-    } catch (e) { setErr(e.message); setRows([]); }
+const STATUS_LABELS = {
+  active: 'активна',
+  pending: 'ожидает',
+  revoked: 'отозвана',
+  expired: 'истекла',
+  exhausted: 'лимит',
+};
+
+function SubscriptionsTab({ token, notify }) {
+  const { data: rows, err, reload } = usePolling(() => listSubscriptions(token), [token]);
+  const [filter, setFilter] = useState('all');
+  const [q, setQ] = useState('');
+  const [editId, setEditId] = useState(null);
+  const [days, setDays] = useState(30);
+  const [limit, setLimit] = useState('');
+
+  const act = (fn, msg, confirmMsg) => async (id) => {
+    if (confirmMsg && !confirm(confirmMsg)) return;
+    try { await fn(token, id); reload(); if (msg) notify(msg); } catch (e) { notify(e.message, 'err'); }
+  };
+  const onRevoke = act((t, id) => revokeSubscription(t, id, 'admin'), 'Отозвано', 'Отозвать подписку?');
+  const onDelete = act(deleteSubscription, 'Удалено', 'Удалить подписку?');
+
+  function startEdit(r) {
+    setEditId(r.id); setDays(30); setLimit(r.trafficLimitGb ?? '');
+  }
+  async function saveEdit(id) {
+    const patch = {};
+    if (days) patch.extendDays = parseInt(days, 10);
+    patch.trafficLimitGb = limit === '' ? null : parseInt(limit, 10);
+    try { await updateSubscription(token, id, patch); setEditId(null); reload(); notify('Сохранено'); }
+    catch (e) { notify(e.message, 'err'); }
   }
 
-  useEffect(() => { load(); }, [token]);
-
-  async function onRevoke(id) {
-    if (!confirm('Отозвать подписку?')) return;
-    try { await revokeSubscription(token, id, 'admin'); load(); } catch (e) { setErr(e.message); }
-  }
-
-  if (err) return <p className="admin-msg err-text">{err}</p>;
+  if (err && !rows) return <p className="admin-msg err-text">{err}</p>;
   if (!rows) return <p className="admin-msg">Загрузка…</p>;
-  if (rows.length === 0) return <p className="admin-msg">Подписок пока нет.</p>;
+
+  const needle = q.trim().toLowerCase();
+  const filtered = rows.filter((r) => (filter === 'all' || (r.effectiveStatus || r.status) === filter)
+    && (!needle || [r.userName, r.userEmail, r.token].some((v) => (v || '').toLowerCase().includes(needle))));
 
   return (
-    <div className="table-wrap">
-      <table className="atable">
-        <thead><tr><th>Пользователь</th><th>Email</th><th>Токен</th><th>Статус</th><th>Создан</th><th>Истекает</th><th>Действия</th></tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id}>
-              <td>{r.userName || '—'}</td>
-              <td>{r.userEmail || '—'}</td>
-              <td className="mono">{r.token.slice(0, 16)}…</td>
-              <td><span className={`badge ${r.status}`}>{r.status}</span></td>
-              <td className="dim">{fmt(r.createdAt)}</td>
-              <td className="dim">{r.expiresAt ? fmt(r.expiresAt) : '—'}</td>
-              <td>
-                {r.status === 'active' && (
-                  <button className="btn ghost xs" onClick={() => onRevoke(r.id)}>Отозвать</button>
-                )}
-              </td>
-            </tr>
+    <div>
+      <div className="toolbar">
+        <div className="segmented">
+          {STATUS_FILTERS.map((f) => (
+            <button key={f.id} className={filter === f.id ? 'on' : ''} onClick={() => setFilter(f.id)}>{f.label}</button>
           ))}
-        </tbody>
-      </table>
+        </div>
+        <input className="search" placeholder="Поиск: имя, email, токен" value={q} onChange={(e) => setQ(e.target.value)} />
+        <span className="dim">{filtered.length} из {rows.length}</span>
+      </div>
+
+      {filtered.length === 0 ? <p className="admin-msg">Ничего не найдено.</p> : (
+        <div className="table-wrap">
+          <table className="atable">
+            <thead><tr><th>Пользователь</th><th>Email</th><th>Токен</th><th>Статус</th><th>Трафик</th><th>Создан</th><th>Действия</th></tr></thead>
+            <tbody>
+              {filtered.map((r) => (
+                <Fragment key={r.id}>
+                  <tr>
+                    <td>{r.userName || '—'}</td>
+                    <td>{r.userEmail || '—'}</td>
+                    <td className="mono">{r.token.slice(0, 12)}… <button className="linkbtn" title="Копировать токен" onClick={() => copy(r.token, notify)}>копир.</button></td>
+                    <td><span className={`badge ${r.effectiveStatus || r.status}`}>{STATUS_LABELS[r.effectiveStatus || r.status] || r.effectiveStatus || r.status}</span></td>
+                    <td className="dim">{(r.trafficUsedGb || 0).toFixed(1)} / {r.trafficLimitGb ? `${r.trafficLimitGb} ГБ` : '∞'}</td>
+                    <td className="dim">{fmtDate(r.createdAt)}</td>
+                    <td className="row-actions">
+                      {(r.effectiveStatus || r.status) === 'active' && (
+                        <>
+                          <button className="btn ghost xs" title="Умная ссылка с маршрутизацией — для Hiddify и телефона" onClick={() => copy(subUrl(r.token, 'singbox'), notify)}>Ссылка Hiddify</button>
+                          <button className="btn ghost xs" title="Зашифрованная ссылка — открывается только в приложении Dogma" onClick={() => copy(subUrl(r.token, 'enc'), notify)}>Ссылка Dogma</button>
+                          <button className="btn ghost xs" onClick={() => startEdit(r)}>Изменить</button>
+                          <button className="btn ghost xs danger" onClick={() => onRevoke(r.id)}>Отозвать</button>
+                        </>
+                      )}
+                      {['revoked', 'expired', 'exhausted'].includes(r.effectiveStatus || r.status) && <button className="btn ghost xs danger" onClick={() => onDelete(r.id)}>Удалить</button>}
+                    </td>
+                  </tr>
+                  {editId === r.id && (
+                    <tr className="edit-row edit-row-open"><td colSpan={7}>
+                      <div className="inline-edit">
+                        <label className="field inline"><span className="field-label">Продлить на (дней)</span><input type="number" value={days} onChange={(e) => setDays(e.target.value)} /></label>
+                        <label className="field inline"><span className="field-label">Лимит трафика, ГБ (пусто = ∞)</span><input type="number" value={limit} onChange={(e) => setLimit(e.target.value)} /></label>
+                        <button className="btn primary sm" onClick={() => saveEdit(r.id)}>Сохранить</button>
+                        <button className="btn ghost sm" onClick={() => setEditId(null)}>Отмена</button>
+                      </div>
+                    </td></tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
-function StatsTab({ token }) {
-  const [stats, setStats] = useState(null);
-  const [err, setErr] = useState('');
+// ── Пользователи ─────────────────────────────────────────────────────────────
+function UsersTab({ token, notify }) {
+  const { data: rows, err, reload } = usePolling(() => listUsers(token), [token], 10000);
+  const [q, setQ] = useState('');
+  const [routingFor, setRoutingFor] = useState(null);
+  const [routing, setRouting] = useState(null);
 
-  useEffect(() => {
-    getStats(token).then(setStats).catch((e) => { setErr(e.message); setStats(null); });
-  }, [token]);
+  async function onDelete(u) {
+    if (!confirm(`Удалить пользователя ${u.fullName || u.username}? Его подписки и переписка будут удалены, доступ отключится.`)) return;
+    try { await deleteUser(token, u.username); reload(); notify('Пользователь удалён'); } catch (e) { notify(e.message, 'err'); }
+  }
+  async function onToggleBlock(u) {
+    const next = !u.blocked;
+    if (next && !confirm(`Заблокировать ${u.fullName || u.username}? Он не сможет войти, VPN-доступ отключится.`)) return;
+    try { await setUserBlocked(token, u.username, next); reload(); notify(next ? 'Заблокирован' : 'Разблокирован'); } catch (e) { notify(e.message, 'err'); }
+  }
+  async function onRouting(u) {
+    if (routingFor === u.username) { setRoutingFor(null); return; }
+    setRoutingFor(u.username); setRouting(null);
+    try { setRouting(await getUserRouting(token, u.username)); } catch (e) { notify(e.message, 'err'); }
+  }
 
-  if (err) return <p className="admin-msg err-text">{err}</p>;
-  if (!stats) return <p className="admin-msg">Загрузка…</p>;
+  if (err && !rows) return <p className="admin-msg err-text">{err}</p>;
+  if (!rows) return <p className="admin-msg">Загрузка…</p>;
+
+  const needle = q.trim().toLowerCase();
+  const filtered = rows.filter((u) => !needle || [u.username, u.fullName, u.email].some((v) => (v || '').toLowerCase().includes(needle)));
 
   return (
-    <div className="panel">
-      <div className="field-row" style={{ gap: 24, flexWrap: 'wrap' }}>
-        <div><div className="field-label">Всего нод</div><div className="title" style={{ margin: 0 }}>{stats.totalNodes}</div></div>
-        <div><div className="field-label">Активных нод</div><div className="title" style={{ margin: 0 }}>{stats.activeNodes}</div></div>
-        <div><div className="field-label">Всего подписок</div><div className="title" style={{ margin: 0 }}>{stats.totalSubscriptions}</div></div>
-        <div><div className="field-label">Активных подписок</div><div className="title" style={{ margin: 0 }}>{stats.activeSubscriptions}</div></div>
+    <div>
+      <div className="toolbar">
+        <input className="search" placeholder="Поиск: логин, ФИО, email" value={q} onChange={(e) => setQ(e.target.value)} />
+        <span className="dim">{filtered.length} из {rows.length}</span>
+      </div>
+      {filtered.length === 0 ? <p className="admin-msg">Ничего не найдено.</p> : (
+        <div className="table-wrap">
+          <table className="atable">
+            <thead><tr><th>Логин</th><th>ФИО</th><th>Email</th><th>Статус</th><th>Регистрация</th><th>Последний вход</th><th>Действия</th></tr></thead>
+            <tbody>
+              {filtered.map((u) => (
+                <Fragment key={u.username}>
+                  <tr>
+                    <td className="mono">{u.username}</td>
+                    <td>{u.fullName || '—'}</td>
+                    <td>{u.email || '—'}</td>
+                    <td><span className={`badge ${u.blocked ? 'fail' : 'active'}`}>{u.blocked ? 'заблокирован' : 'активен'}</span></td>
+                    <td className="dim">{fmtDate(u.createdAt)}</td>
+                    <td className="dim">{u.lastLogin ? fmt(u.lastLogin) : '—'}</td>
+                    <td className="row-actions">
+                      <button className="btn ghost xs" onClick={() => onRouting(u)}>{routingFor === u.username ? 'Скрыть' : 'Маршруты'}</button>
+                      <button className="btn ghost xs" onClick={() => onToggleBlock(u)}>{u.blocked ? 'Разблок.' : 'Блок'}</button>
+                      <button className="btn ghost xs danger" onClick={() => onDelete(u)}>Удалить</button>
+                    </td>
+                  </tr>
+                  {routingFor === u.username && (
+                    <tr className="edit-row"><td colSpan={7}>
+                      {!routing ? <span className="dim">Загрузка…</span> : <RoutingSummary p={routing} />}
+                    </td></tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RoutingSummary({ p }) {
+  return (
+    <div className="routing-summary">
+      <span className="badge active">{p.mode === 'selective' ? 'Только выбранное' : 'Весь трафик'}</span>
+      {p.mode === 'global' && <span className="dim">RU напрямую: {p.ruDirect ? 'да' : 'нет'}</span>}
+      {(p.presets || []).length > 0 && <span className="dim">Сервисы: {p.presets.join(', ')}</span>}
+      {(p.proxyDomains || []).length > 0 && <span className="dim">Через VPN: {p.proxyDomains.join(', ')}</span>}
+      {(p.directDomains || []).length > 0 && <span className="dim">Напрямую: {p.directDomains.join(', ')}</span>}
+    </div>
+  );
+}
+
+// ── Заявки ───────────────────────────────────────────────────────────────────
+function PendingTab({ token, notify }) {
+  const { data: rows, err, reload } = usePolling(() => listPending(token), [token]);
+
+  async function onApprove(id) {
+    try { await approveSubscription(token, id); reload(); notify('Заявка одобрена'); } catch (e) { notify(e.message, 'err'); }
+  }
+  async function onDeny(id) {
+    if (!confirm('Отклонить заявку?')) return;
+    try { await denySubscription(token, id, 'denied'); reload(); notify('Заявка отклонена'); } catch (e) { notify(e.message, 'err'); }
+  }
+
+  if (err && !rows) return <p className="admin-msg err-text">{err}</p>;
+  if (!rows) return <p className="admin-msg">Загрузка…</p>;
+  if (rows.length === 0) return <p className="admin-msg">Заявок на одобрение нет.</p>;
+
+  return (
+    <div>
+      <p className="lead" style={{ marginTop: 0 }}>Эти пользователи были отозваны и подали новую заявку. Одобрите — им станет доступна ссылка.</p>
+      <div className="table-wrap">
+        <table className="atable">
+          <thead><tr><th>Пользователь</th><th>Email</th><th>Подана</th><th>Действия</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td>{r.userName || '—'}</td>
+                <td>{r.userEmail || '—'}</td>
+                <td className="dim">{fmt(r.createdAt)}</td>
+                <td className="row-actions">
+                  <button className="btn primary xs" onClick={() => onApprove(r.id)}>Одобрить</button>
+                  <button className="btn ghost xs danger" onClick={() => onDeny(r.id)}>Отклонить</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-function fmt(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleString();
+// ── Чат ──────────────────────────────────────────────────────────────────────
+function ChatTab({ token }) {
+  const { data: chats } = usePolling(() => listChats(token), [token]);
+  const [selected, setSelected] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState('');
+  const bodyRef = useRef(null);
+
+  async function loadMessages(userSub) {
+    try { setMessages(await getChatMessages(token, userSub)); } catch { /* ignore */ }
+  }
+
+  useEffect(() => {
+    if (!selected) return undefined;
+    loadMessages(selected);
+    const iv = setInterval(() => loadMessages(selected), 4000);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected]);
+
+  useEffect(() => {
+    if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  }, [messages]);
+
+  async function onSend() {
+    const val = text.trim();
+    if (!val || !selected) return;
+    setText('');
+    try { const m = await sendChatMessage(token, selected, val); setMessages((p) => [...p, m]); } catch { /* ignore */ }
+  }
+
+  const list = chats || [];
+  const current = list.find((c) => c.userSub === selected);
+
+  return (
+    <div className="chat-admin">
+      <aside className="chat-list">
+        {list.length === 0 && <p className="admin-msg" style={{ padding: 12 }}>Диалогов пока нет.</p>}
+        {list.map((c) => (
+          <button key={c.userSub} className={`chat-list-item ${c.userSub === selected ? 'on' : ''}`} onClick={() => setSelected(c.userSub)}>
+            <div className="chat-list-name">
+              {c.userName || c.userSub}
+              {c.unread > 0 && <span className="badge pending" style={{ marginLeft: 6 }}>{c.unread}</span>}
+            </div>
+            <div className="chat-list-last">{c.lastSender === 'admin' ? 'Вы: ' : ''}{c.lastText}</div>
+          </button>
+        ))}
+      </aside>
+      <div className="chat-conv">
+        {!selected && <p className="admin-msg">Выберите диалог слева.</p>}
+        {selected && (
+          <>
+            <div className="chat-conv-head">{current?.userName || selected} <span className="dim">· {current?.userEmail || ''}</span></div>
+            <div className="chat-conv-body" ref={bodyRef}>
+              {messages.map((m) => (
+                <div key={m.id} className={`chat-msg ${m.sender === 'admin' ? 'me' : 'them'}`}><div className="chat-bubble">{m.text}</div></div>
+              ))}
+            </div>
+            <div className="chat-input">
+              <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') onSend(); }} placeholder="Ответить…" />
+              <button className="btn primary" onClick={onSend} disabled={!text.trim()}>Отправить</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }

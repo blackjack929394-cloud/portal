@@ -1,7 +1,7 @@
 {
-  "name": "checkpoint-cert-portal-backend",
-  "version": "0.2.0",
-  "description": "Self-service portal backend for issuing Check Point certificates (DOGMA)",
+  "name": "vpn-platform-backend",
+  "version": "0.3.0",
+  "description": "Self-service VPN platform backend (DOGMA): subscriptions, nodes, RU→EU WireGuard tunnel + Hysteria2 proxy",
   "type": "module",
   "engines": {
     "node": ">=22.5.0"
@@ -9,20 +9,21 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "node --test",
-    "poc": "node scripts/poc.js"
+    "test": "node --env-file=test/test.env --test --test-concurrency=1"
   },
   "dependencies": {
+    "connect-redis": "^7.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",
     "express-session": "^1.18.0",
     "helmet": "^7.1.0",
-    "nodemailer": "^6.9.14",
     "openid-client": "^5.7.0",
+    "pg": "^8.12.0",
     "pino": "^9.3.2",
     "pino-http": "^10.2.0",
+    "redis": "^4.7.0",
     "ssh2": "^1.17.0",
     "tweetnacl": "^1.0.3",
     "zod": "^3.23.8"

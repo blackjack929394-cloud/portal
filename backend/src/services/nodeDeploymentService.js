@@ -6,9 +6,9 @@ import { createSshClient } from './sshClient.js';
 import { generateKeyPair, generatePresharedKey } from './wgKeygen.js';
 import { allocateTunnelIps } from './wgNetworkAllocator.js';
 import {
-  generatePassword,
   generateServerConfig,
   generateDockerCompose,
+  generatePassword,
 } from './hysteriaConfig.js';
 
 const WG_CONFIG_PATH = '/etc/wireguard/wg0.conf';
@@ -17,6 +17,7 @@ const HYSTERIA_CONFIG_PATH = `${HYSTERIA_DIR}/config.yaml`;
 const HYSTERIA_COMPOSE_PATH = `${HYSTERIA_DIR}/docker-compose.yaml`;
 const HYSTERIA_CERT_PATH = `${HYSTERIA_DIR}/server.crt`;
 const HYSTERIA_KEY_PATH = `${HYSTERIA_DIR}/server.key`;
+const TRAFFIC_STATS_PORT = 9999;
 
 function getIntermediateSshConfig() {
   const c = config.intermediate;
@@ -104,10 +105,9 @@ async function deployWireGuardIntermediate({ ssh, nodeIp, nodePublicKey, interme
   return keys;
 }
 
-async function deployWireGuardNode({ ssh, nodeIp, intermediatePublicKey, intermediateIp, intermediateHost, network, wgListenPort }) {
-  const keys = generateKeyPair();
+async function deployWireGuardNode({ ssh, nodeIp, nodePrivateKey, intermediatePublicKey, intermediateIp, intermediateHost, network, wgListenPort }) {
   const cfg = buildWgConfig({
-    privateKey: keys.privateKey,
+    privateKey: nodePrivateKey,
     address: `${nodeIp}/${network.split('/')[1]}`,
     peers: [
       {
@@ -123,11 +123,9 @@ async function deployWireGuardNode({ ssh, nodeIp, intermediatePublicKey, interme
   await ssh.writeFile(WG_CONFIG_PATH, cfg, 0o600);
   await ssh.exec('wg-quick down wg0 2>/dev/null; wg-quick up wg0');
   await ssh.exec('systemctl enable wg-quick@wg0');
-
-  return keys;
 }
 
-async function deployHysteria({ ssh, nodeIp, port, password }) {
+async function deployHysteria({ ssh, nodeIp, port, authUrl }) {
   await ssh.exec(`mkdir -p ${HYSTERIA_DIR} && chmod 700 ${HYSTERIA_DIR}`);
   await ssh.exec(
     `openssl req -x509 -newkey rsa:2048 -keyout ${HYSTERIA_KEY_PATH} -out ${HYSTERIA_CERT_PATH} -days 365 -nodes -subj "/CN=hysteria-node"`,
@@ -135,25 +133,35 @@ async function deployHysteria({ ssh, nodeIp, port, password }) {
   const { stdout: certFingerprint } = await ssh.exec(`openssl x509 -in ${HYSTERIA_CERT_PATH} -noout -sha256 -fingerprint | cut -d= -f2 | tr -d ':'`);
   const fingerprint = certFingerprint.trim();
 
+  const trafficStatsSecret = generatePassword(32);
   const serverConfig = generateServerConfig({
     listenHost: nodeIp,
     listenPort: port,
-    password,
+    authUrl,
     certPath: HYSTERIA_CERT_PATH,
     keyPath: HYSTERIA_KEY_PATH,
+    trafficStats: {
+      listen: `${nodeIp}:${TRAFFIC_STATS_PORT}`,
+      secret: trafficStatsSecret,
+    },
   });
-  const compose = generateDockerCompose({ image: config.deployment.hysteriaDockerImage });
+  const compose = generateDockerCompose({ image: config.deployment.hysteriaDockerImage, configPath: HYSTERIA_CONFIG_PATH, certPath: HYSTERIA_CERT_PATH, keyPath: HYSTERIA_KEY_PATH });
 
   await ssh.writeFile(HYSTERIA_CONFIG_PATH, serverConfig, 0o600);
   await ssh.writeFile(HYSTERIA_COMPOSE_PATH, compose, 0o600);
   await ssh.exec(`cd ${HYSTERIA_DIR} && docker compose down 2>/dev/null; docker compose up -d`);
 
-  return { fingerprint };
+  return {
+    fingerprint,
+    trafficStatsSecret,
+    trafficStatsEndpoint: `http://${nodeIp}:${TRAFFIC_STATS_PORT}/traffic`,
+  };
 }
 
 async function configureIntermediateForwarding({ ssh, publicPort, nodeIp, hysteriaPort }) {
-  await ssh.exec(`iptables -t nat -D PREROUTING -p udp --dport ${publicPort} -j DNAT --to-destination ${nodeIp}:${hysteriaPort} 2>/dev/null || true`);
-  await ssh.exec(`iptables -t nat -D PREROUTING -p tcp --dport ${publicPort} -j DNAT --to-destination ${nodeIp}:${hysteriaPort} 2>/dev/null || true`);
+  // Удаляем все старые DNAT-правила для данного публичного порта (с любым destination),
+  // чтобы не оставалось "зомби"-форвардингов после смены IP ноды или порта.
+  await ssh.exec(`iptables -t nat -L PREROUTING -n --line-numbers | grep -E 'dpt:${publicPort}' | awk '{print \\$1}' | sort -rn | while read n; do iptables -t nat -D PREROUTING \\$n; done`);
   await ssh.exec(`iptables -D FORWARD -p udp -d ${nodeIp} --dport ${hysteriaPort} -j ACCEPT 2>/dev/null || true`);
   await ssh.exec(`iptables -D FORWARD -p tcp -d ${nodeIp} --dport ${hysteriaPort} -j ACCEPT 2>/dev/null || true`);
 
@@ -167,10 +175,10 @@ async function configureIntermediateForwarding({ ssh, publicPort, nodeIp, hyster
 }
 
 export async function deployNode(nodeId) {
-  const node = vpnNodeStore.get(nodeId);
+  const node = await vpnNodeStore.get(nodeId);
   if (!node) throw new Error('Node not found');
 
-  vpnNodeStore.update(nodeId, { deploymentStatus: 'deploying', deploymentError: null });
+  await vpnNodeStore.update(nodeId, { deploymentStatus: 'deploying', deploymentError: null });
   audit('vpn.node_deploy_started', { nodeId });
   logger.info({ nodeId }, 'Starting node deployment');
 
@@ -186,10 +194,10 @@ export async function deployNode(nodeId) {
     await ensureWireGuard(intermediateSsh);
     await ensureWireGuard(nodeSsh);
 
-    const existingIps = vpnNodeStore.listAll().map((n) => n.wgTunnelIp).filter(Boolean);
+    const existingIps = (await vpnNodeStore.listAll()).map((n) => n.wgTunnelIp).filter(Boolean);
     const { intermediateIp, nodeIp } = allocateTunnelIps(config.deployment.wgTunnelNetwork, existingIps);
     const port = node.port || 443;
-    const password = generatePassword();
+    const authUrl = `${config.publicBaseUrl || `https://${config.intermediate.host}`}/hysteria/auth`;
 
     // 1. Деплой WG на intermediate (нужен публичный ключ ноды)
     const nodeWgKeys = generateKeyPair();
@@ -206,6 +214,7 @@ export async function deployNode(nodeId) {
     await deployWireGuardNode({
       ssh: nodeSsh,
       nodeIp,
+      nodePrivateKey: nodeWgKeys.privateKey,
       intermediatePublicKey: intermediateWgKeys.publicKey,
       intermediateIp,
       intermediateHost: intermediateCfg.host,
@@ -214,7 +223,7 @@ export async function deployNode(nodeId) {
     });
 
     // 3. Деплой Hysteria на ноде
-    const hysteria = await deployHysteria({ ssh: nodeSsh, nodeIp, port, password });
+    const hysteria = await deployHysteria({ ssh: nodeSsh, nodeIp, port, authUrl });
 
     // 4. Форвардинг на intermediate
     await configureIntermediateForwarding({
@@ -230,7 +239,7 @@ export async function deployNode(nodeId) {
       logger.warn({ nodeId, nodeIp }, 'WG tunnel ping check failed');
     }
 
-    const updated = vpnNodeStore.update(nodeId, {
+    const updated = await vpnNodeStore.update(nodeId, {
       kind: 'hysteria2',
       deploymentStatus: 'active',
       deploymentError: null,
@@ -241,9 +250,12 @@ export async function deployNode(nodeId) {
       intermediatePublicPort: port,
       hysteriaConfig: {
         port,
-        password,
+        authUrl,
         tlsFingerprint: hysteria.fingerprint,
       },
+      trafficStatsEnabled: true,
+      trafficStatsEndpoint: hysteria.trafficStatsEndpoint,
+      trafficStatsSecret: hysteria.trafficStatsSecret,
       extra: {
         ...(node.extra || {}),
         network: config.deployment.wgTunnelNetwork,
@@ -255,7 +267,7 @@ export async function deployNode(nodeId) {
     logger.info({ nodeId, nodeIp }, 'Node deployment completed');
     return updated;
   } catch (err) {
-    vpnNodeStore.update(nodeId, { deploymentStatus: 'failed', deploymentError: err.message });
+    await vpnNodeStore.update(nodeId, { deploymentStatus: 'failed', deploymentError: err.message });
     audit('vpn.node_deploy_failed', { nodeId, error: err.message });
     logger.error({ err, nodeId }, 'Node deployment failed');
     throw err;

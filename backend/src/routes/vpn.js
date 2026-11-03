@@ -10,6 +10,11 @@ const adminRouter = Router();
 router.get('/vpn/subscription', requireAuth, ctrl.getMySubscription);
 router.post('/vpn/subscriptions', requireAuth, ctrl.createSubscription);
 router.post('/vpn/subscription/revoke', requireAuth, ctrl.revokeMySubscription);
+router.get('/vpn/routing', requireAuth, ctrl.getMyRouting);
+router.put('/vpn/routing', requireAuth, ctrl.updateMyRouting);
+router.get('/chat', requireAuth, ctrl.getMyChat);
+router.get('/chat/unread', requireAuth, ctrl.getMyChatUnread);
+router.post('/chat', requireAuth, ctrl.sendMyChatMessage);
 
 // ── Public client API (no auth, token-based) ─────────────────────────────────
 router.get('/sub/:token', ctrl.getSubscriptionConfig);
@@ -26,8 +31,20 @@ adminRouter.get('/nodes/:id/deploy-status', ctrl.getDeployStatus);
 adminRouter.post('/nodes/:id/redeploy', ctrl.redeployNodeController);
 adminRouter.post('/nodes/:id/rotate-wg-keys', ctrl.rotateWgKeysController);
 adminRouter.get('/subscriptions', ctrl.listSubscriptions);
+adminRouter.get('/pending', ctrl.listPendingSubscriptions);
+adminRouter.get('/chats', ctrl.listChats);
+adminRouter.get('/chats/messages', ctrl.getChatMessages);
+adminRouter.post('/chats/messages', ctrl.sendAdminChatMessage);
+adminRouter.post('/subscriptions/:id/approve', ctrl.approveSubscriptionController);
+adminRouter.post('/subscriptions/:id/deny', ctrl.denySubscriptionController);
 adminRouter.post('/subscriptions/:id/revoke', ctrl.revokeSubscription);
+adminRouter.patch('/subscriptions/:id', ctrl.updateSubscriptionController);
+adminRouter.delete('/subscriptions/:id', ctrl.deleteSubscription);
 adminRouter.get('/stats', ctrl.getStats);
+adminRouter.get('/users', ctrl.listUsersController);
+adminRouter.get('/users/:username/routing', ctrl.getUserRoutingController);
+adminRouter.post('/users/:username/block', ctrl.setUserBlockedController);
+adminRouter.delete('/users/:username', ctrl.deleteUserController);
 
 router.use('/vpn', adminRouter);
 

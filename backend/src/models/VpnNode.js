@@ -1,86 +1,8 @@
-import path from 'node:path';
-import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
-import { DatabaseSync } from 'node:sqlite';
+import { query } from '../db/postgres.js';
 
 // Хранилище VPN-нод (выходных точек).
 // Каждая нода — это VM с развёрнутым VPN-стеком (sing-box, xray, hysteria2, wg и т.д.).
-
-const dirName = path.dirname(fileURLToPath(import.meta.url));
-const STORAGE_DIR = process.env.NODE_ENV === 'test'
-  ? path.resolve(dirName, '../../storage-test')
-  : path.resolve(dirName, '../../storage');
-const DB_PATH = path.join(STORAGE_DIR, 'vpn_nodes.db');
-
-let db = null;
-
-function getDb() {
-  if (db) return db;
-  fs.mkdirSync(STORAGE_DIR, { recursive: true });
-  db = new DatabaseSync(DB_PATH);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS vpn_nodes (
-      id          TEXT PRIMARY KEY,
-      name        TEXT NOT NULL,
-      host        TEXT NOT NULL,
-      port        INTEGER NOT NULL DEFAULT 443,
-      protocol    TEXT NOT NULL DEFAULT 'sing-box',
-      kind        TEXT NOT NULL DEFAULT 'sing-box',
-      region      TEXT,
-      provider    TEXT,
-      status      TEXT NOT NULL DEFAULT 'active',
-      public_key  TEXT,
-      extra_json  TEXT,
-      deployment_status TEXT,
-      deployment_error  TEXT,
-      wg_tunnel_ip      TEXT,
-      wg_public_key     TEXT,
-      wg_private_key    TEXT,
-      ssh_host          TEXT,
-      ssh_port          INTEGER DEFAULT 22,
-      ssh_user          TEXT DEFAULT 'root',
-      ssh_key           TEXT,
-      ssh_key_path      TEXT,
-      ssh_key_base64    TEXT,
-      intermediate_host       TEXT,
-      intermediate_public_port INTEGER,
-      hysteria_config_json    TEXT,
-      created_at  TEXT NOT NULL,
-      updated_at  TEXT NOT NULL,
-      last_seen_at TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_vn_stat ON vpn_nodes(status);
-    CREATE INDEX IF NOT EXISTS idx_vn_kind ON vpn_nodes(kind);
-  `);
-
-  // Миграции: добавляем колонки, если их нет (для существующих БД)
-  const columns = db.prepare("PRAGMA table_info(vpn_nodes)").all().map((r) => r.name);
-  const additions = [
-    { name: 'kind', def: "TEXT NOT NULL DEFAULT 'sing-box'" },
-    { name: 'deployment_status', def: 'TEXT' },
-    { name: 'deployment_error', def: 'TEXT' },
-    { name: 'wg_tunnel_ip', def: 'TEXT' },
-    { name: 'wg_public_key', def: 'TEXT' },
-    { name: 'wg_private_key', def: 'TEXT' },
-    { name: 'ssh_host', def: 'TEXT' },
-    { name: 'ssh_port', def: 'INTEGER DEFAULT 22' },
-    { name: 'ssh_user', def: "TEXT DEFAULT 'root'" },
-    { name: 'ssh_key', def: 'TEXT' },
-    { name: 'ssh_key_path', def: 'TEXT' },
-    { name: 'ssh_key_base64', def: 'TEXT' },
-    { name: 'intermediate_host', def: 'TEXT' },
-    { name: 'intermediate_public_port', def: 'INTEGER' },
-    { name: 'hysteria_config_json', def: 'TEXT' },
-  ];
-  for (const col of additions) {
-    if (!columns.includes(col.name)) {
-      db.exec(`ALTER TABLE vpn_nodes ADD COLUMN ${col.name} ${col.def}`);
-    }
-  }
-
-  return db;
-}
 
 function rowToNode(row) {
   if (!row) return null;
@@ -110,14 +32,17 @@ function rowToNode(row) {
     intermediateHost: row.intermediate_host,
     intermediatePublicPort: row.intermediate_public_port,
     hysteriaConfig: row.hysteria_config_json ? JSON.parse(row.hysteria_config_json) : null,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    lastSeenAt: row.last_seen_at,
+    trafficStatsEnabled: row.traffic_stats_enabled,
+    trafficStatsEndpoint: row.traffic_stats_endpoint,
+    trafficStatsSecret: row.traffic_stats_secret,
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
+    lastSeenAt: row.last_seen_at ? new Date(row.last_seen_at).toISOString() : null,
   };
 }
 
 class VpnNodeStore {
-  create({ name, host, port, protocol, kind, region, provider, publicKey, extra, sshHost, sshPort, sshUser, sshKey, sshKeyPath, sshKeyBase64 }) {
+  async create({ name, host, port, protocol, kind, region, provider, publicKey, extra, sshHost, sshPort, sshUser, sshKey, sshKeyPath, sshKeyBase64 }) {
     const now = new Date().toISOString();
     const rec = {
       id: randomUUID(),
@@ -145,72 +70,72 @@ class VpnNodeStore {
       intermediateHost: null,
       intermediatePublicPort: null,
       hysteriaConfig: null,
+      trafficStatsEnabled: false,
+      trafficStatsEndpoint: null,
+      trafficStatsSecret: null,
       createdAt: now,
       updatedAt: now,
       lastSeenAt: null,
     };
-    getDb()
-      .prepare(
-        `INSERT INTO vpn_nodes (id, name, host, port, protocol, kind, region, provider, status, public_key, extra_json,
-          deployment_status, deployment_error, wg_tunnel_ip, wg_public_key, wg_private_key,
-          ssh_host, ssh_port, ssh_user, ssh_key, ssh_key_path, ssh_key_base64,
-          intermediate_host, intermediate_public_port, hysteria_config_json, created_at, updated_at, last_seen_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        rec.id, rec.name, rec.host, rec.port, rec.protocol, rec.kind, rec.region, rec.provider, rec.status,
+    await query(
+      `INSERT INTO vpn_nodes (id, name, host, port, protocol, kind, region, provider, status, public_key, extra_json,
+        deployment_status, deployment_error, wg_tunnel_ip, wg_public_key, wg_private_key,
+        ssh_host, ssh_port, ssh_user, ssh_key, ssh_key_path, ssh_key_base64,
+        intermediate_host, intermediate_public_port, hysteria_config_json,
+        traffic_stats_enabled, traffic_stats_endpoint, traffic_stats_secret,
+        created_at, updated_at, last_seen_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)`,
+      [rec.id, rec.name, rec.host, rec.port, rec.protocol, rec.kind, rec.region, rec.provider, rec.status,
         rec.publicKey, JSON.stringify(rec.extra),
         rec.deploymentStatus, rec.deploymentError, rec.wgTunnelIp, rec.wgPublicKey, rec.wgPrivateKey,
         rec.sshHost, rec.sshPort, rec.sshUser, rec.sshKey, rec.sshKeyPath, rec.sshKeyBase64,
         rec.intermediateHost, rec.intermediatePublicPort, JSON.stringify(rec.hysteriaConfig),
-        rec.createdAt, rec.updatedAt, rec.lastSeenAt,
-      );
+        rec.trafficStatsEnabled, rec.trafficStatsEndpoint, rec.trafficStatsSecret,
+        rec.createdAt, rec.updatedAt, rec.lastSeenAt],
+    );
     return rec;
   }
 
-  get(id) {
-    return rowToNode(getDb().prepare('SELECT * FROM vpn_nodes WHERE id = ?').get(id));
+  async get(id) {
+    const { rows } = await query('SELECT * FROM vpn_nodes WHERE id = $1', [id]);
+    return rowToNode(rows[0]);
   }
 
-  update(id, patch) {
-    const existing = this.get(id);
+  async update(id, patch) {
+    const existing = await this.get(id);
     if (!existing) return null;
     const rec = { ...existing, ...patch, updatedAt: new Date().toISOString() };
-    getDb()
-      .prepare(
-        `UPDATE vpn_nodes SET
-          name = ?, host = ?, port = ?, protocol = ?, kind = ?, region = ?, provider = ?, status = ?, public_key = ?, extra_json = ?,
-          deployment_status = ?, deployment_error = ?, wg_tunnel_ip = ?, wg_public_key = ?, wg_private_key = ?,
-          ssh_host = ?, ssh_port = ?, ssh_user = ?, ssh_key = ?, ssh_key_path = ?, ssh_key_base64 = ?,
-          intermediate_host = ?, intermediate_public_port = ?, hysteria_config_json = ?, updated_at = ?, last_seen_at = ?
-         WHERE id = ?`,
-      )
-      .run(
-        rec.name, rec.host, rec.port, rec.protocol, rec.kind, rec.region, rec.provider, rec.status, rec.publicKey, JSON.stringify(rec.extra || {}),
+    await query(
+      `UPDATE vpn_nodes SET
+        name = $1, host = $2, port = $3, protocol = $4, kind = $5, region = $6, provider = $7, status = $8, public_key = $9, extra_json = $10,
+        deployment_status = $11, deployment_error = $12, wg_tunnel_ip = $13, wg_public_key = $14, wg_private_key = $15,
+        ssh_host = $16, ssh_port = $17, ssh_user = $18, ssh_key = $19, ssh_key_path = $20, ssh_key_base64 = $21,
+        intermediate_host = $22, intermediate_public_port = $23, hysteria_config_json = $24,
+        traffic_stats_enabled = $25, traffic_stats_endpoint = $26, traffic_stats_secret = $27,
+        updated_at = $28, last_seen_at = $29
+       WHERE id = $30`,
+      [rec.name, rec.host, rec.port, rec.protocol, rec.kind, rec.region, rec.provider, rec.status, rec.publicKey, JSON.stringify(rec.extra || {}),
         rec.deploymentStatus, rec.deploymentError, rec.wgTunnelIp, rec.wgPublicKey, rec.wgPrivateKey,
         rec.sshHost, rec.sshPort, rec.sshUser, rec.sshKey, rec.sshKeyPath, rec.sshKeyBase64,
         rec.intermediateHost, rec.intermediatePublicPort, JSON.stringify(rec.hysteriaConfig),
-        rec.updatedAt, rec.lastSeenAt, rec.id,
-      );
+        rec.trafficStatsEnabled, rec.trafficStatsEndpoint, rec.trafficStatsSecret,
+        rec.updatedAt, rec.lastSeenAt, rec.id],
+    );
     return rec;
   }
 
-  delete(id) {
-    getDb().prepare('DELETE FROM vpn_nodes WHERE id = ?').run(id);
+  async delete(id) {
+    await query('DELETE FROM vpn_nodes WHERE id = $1', [id]);
   }
 
-  listAll() {
-    return getDb()
-      .prepare('SELECT * FROM vpn_nodes ORDER BY created_at DESC')
-      .all()
-      .map(rowToNode);
+  async listAll() {
+    const { rows } = await query('SELECT * FROM vpn_nodes ORDER BY created_at DESC');
+    return rows.map(rowToNode);
   }
 
-  listActive() {
-    return getDb()
-      .prepare("SELECT * FROM vpn_nodes WHERE status = 'active' ORDER BY created_at DESC")
-      .all()
-      .map(rowToNode);
+  async listActive() {
+    const { rows } = await query("SELECT * FROM vpn_nodes WHERE status = 'active' ORDER BY created_at DESC");
+    return rows.map(rowToNode);
   }
 }
 

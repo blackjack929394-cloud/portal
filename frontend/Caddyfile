@@ -1,6 +1,6 @@
-# DOMAIN задаётся из окружения (compose). Для локального теста = localhost
-# (Caddy выдаст самоподписанный сертификат через свой internal CA).
-{$DOMAIN:localhost} {
+# DOMAIN задаётся из окружения (compose). По умолчанию — публичный домен сервера.
+# Caddy сам выпустит/обновит Let's Encrypt для 192-144-56-63.sslip.io.
+{$DOMAIN:192-144-56-63.sslip.io} {
 	encode gzip
 
 	# API и аутентификация -> бэкенд

@@ -1,28 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequestSchema } from '../src/validators/certificateRequest.js';
+import { guestRegisterSchema } from '../src/validators/authValidators.js';
 
-test('accepts valid Cyrillic full name', () => {
-  const r = createRequestSchema.safeParse({ fullName: 'Иванов Иван Иванович' });
-  assert.ok(r.success);
-});
-
-test('accepts optional valid email', () => {
-  const r = createRequestSchema.safeParse({ fullName: 'Ivan Ivanov', email: 'i@dogma.ru' });
+test('accepts valid Cyrillic full name + email', () => {
+  const r = guestRegisterSchema.safeParse({ fullName: 'Иванов Иван Иванович', email: 'i@dogma.ru' });
   assert.ok(r.success);
 });
 
 test('rejects too-short name', () => {
-  assert.equal(createRequestSchema.safeParse({ fullName: 'И' }).success, false);
+  assert.equal(guestRegisterSchema.safeParse({ fullName: 'И', email: 'i@dogma.ru' }).success, false);
 });
 
 test('rejects forbidden characters', () => {
-  assert.equal(createRequestSchema.safeParse({ fullName: 'Ivan <script>' }).success, false);
+  assert.equal(guestRegisterSchema.safeParse({ fullName: 'Ivan <script>', email: 'i@dogma.ru' }).success, false);
+});
+
+test('email is required for guests', () => {
+  assert.equal(guestRegisterSchema.safeParse({ fullName: 'Ivan Ivanov' }).success, false);
 });
 
 test('rejects bad email', () => {
-  assert.equal(
-    createRequestSchema.safeParse({ fullName: 'Ivan Ivanov', email: 'nope' }).success,
-    false,
-  );
+  assert.equal(guestRegisterSchema.safeParse({ fullName: 'Ivan Ivanov', email: 'nope' }).success, false);
 });
