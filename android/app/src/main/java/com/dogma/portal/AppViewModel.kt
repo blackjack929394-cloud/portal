@@ -1,6 +1,8 @@
 package com.dogma.portal
 
 import android.app.Application
+import android.net.Uri
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dogma.portal.data.ApiException
@@ -10,6 +12,8 @@ import com.dogma.portal.data.NetworkException
 import com.dogma.portal.data.PortalRepository
 import com.dogma.portal.data.Prefs
 import com.dogma.portal.data.ProxyNode
+import com.dogma.portal.data.RoutingPreset
+import com.dogma.portal.data.RoutingProfile
 import com.dogma.portal.data.SpeedPoint
 import com.dogma.portal.data.StatsData
 import com.dogma.portal.data.Subscription
@@ -52,6 +56,25 @@ data class ChatUi(
     val error: String? = null,
 )
 
+data class QrUi(
+    val open: Boolean = false,
+    val busy: Boolean = false,
+    val status: String = "idle", // idle | waiting | approved | expired | error
+    val code: String? = null,
+    val deviceName: String? = null,
+    val platform: String? = null,
+    val error: String? = null,
+)
+
+data class RoutingUi(
+    val loading: Boolean = false,
+    val saving: Boolean = false,
+    val profile: RoutingProfile = RoutingProfile(),
+    val presets: List<RoutingPreset> = emptyList(),
+    val error: String? = null,
+    val saved: Boolean = false,
+)
+
 data class AppState(
     val booting: Boolean = true,
     val bootError: Boolean = false,
@@ -74,6 +97,8 @@ data class AppState(
     val externalIp: String? = null,
     val speedHistory: List<SpeedPoint> = emptyList(),
     val chat: ChatUi = ChatUi(),
+    val qr: QrUi = QrUi(),
+    val routing: RoutingUi = RoutingUi(),
     val requestBusy: Boolean = false,
 ) {
     val subStatus: String get() = subscription?.status ?: "none"
@@ -105,6 +130,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private var ipSince = 0L
     private var ipJob: Job? = null
+    private var qrJob: Job? = null
     private var lastVpnState = VpnState.DISCONNECTED
 
     init {
@@ -208,6 +234,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun logout() {
+        qrJob?.cancel()
         viewModelScope.launch {
             runCatching { VpnManager.stop(application) }
             runCatching { repo.logout() }
@@ -244,6 +271,233 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } else {
                 onAuthed(user)
             }
+        }
+    }
+
+    // ── вход по QR ───────────────────────────────────────────────────────────
+
+    fun openQr() {
+        _state.update {
+            it.copy(qr = QrUi(open = true))
+        }
+    }
+
+    fun closeQr() {
+        qrJob?.cancel()
+        qrJob = null
+        _state.update { it.copy(qr = QrUi()) }
+    }
+
+    /** Deep link dogma://login?code=... из QR-кода на сайте. */
+    fun handleDeepLink(raw: String?): Boolean {
+        if (raw.isNullOrBlank()) return false
+        val uri = runCatching { Uri.parse(raw) }.getOrNull() ?: return false
+        if (uri.scheme != "dogma" || uri.host != "login") return false
+        val code = uri.getQueryParameter("code")?.takeIf { it.isNotBlank() } ?: return false
+        submitQrCode(code)
+        return true
+    }
+
+    fun submitQrCode(raw: String) {
+        val code = extractQrCode(raw)
+        if (code.isBlank()) {
+            _state.update {
+                it.copy(qr = it.qr.copy(open = true, error = Strings(it.lang)["qrInvalidCode"]))
+            }
+            return
+        }
+        qrJob?.cancel()
+        qrJob = viewModelScope.launch {
+            _state.update {
+                it.copy(qr = QrUi(open = true, busy = true, status = "waiting", code = code))
+            }
+            try {
+                val scanned = repo.qrScan(
+                    code = code,
+                    deviceName = Build.MODEL ?: "Android",
+                    platform = "android",
+                    appVersion = BuildConfig.VERSION_NAME,
+                )
+                if (!isActive) return@launch
+                _state.update {
+                    it.copy(
+                        qr = it.qr.copy(
+                            busy = false,
+                            status = "waiting",
+                            deviceName = scanned.deviceName,
+                            platform = scanned.platform,
+                            error = null,
+                        ),
+                    )
+                }
+                pollQr(code)
+            } catch (e: Throwable) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _state.update {
+                    it.copy(
+                        qr = it.qr.copy(
+                            busy = false,
+                            status = "error",
+                            error = qrErrorText(e, Strings(it.lang)),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun pollQr(code: String) {
+        val deadline = System.currentTimeMillis() + 3 * 60 * 1000L
+        while (System.currentTimeMillis() < deadline) {
+            delay(1_500)
+            val session = runCatching { repo.qrStatus(code) }.getOrNull() ?: continue
+            when (session.status) {
+                "confirmed" -> {
+                    claimQr(code)
+                    return
+                }
+                "approved" -> {
+                    _state.update {
+                        it.copy(qr = it.qr.copy(status = "error", error = Strings(it.lang)["qrAlreadyUsed"]))
+                    }
+                    return
+                }
+                "expired", "cancelled" -> {
+                    _state.update { it.copy(qr = it.qr.copy(status = "expired", busy = false)) }
+                    return
+                }
+                else -> _state.update {
+                    it.copy(
+                        qr = it.qr.copy(
+                            status = "waiting",
+                            deviceName = session.deviceName ?: it.qr.deviceName,
+                            platform = session.platform ?: it.qr.platform,
+                        ),
+                    )
+                }
+            }
+        }
+        _state.update {
+            it.copy(qr = it.qr.copy(status = "expired", busy = false))
+        }
+    }
+
+    private suspend fun claimQr(code: String) {
+        val claim = repo.qrClaim(code)
+        require(claim.token.isNotBlank()) { "empty token" }
+        prefs.appToken = claim.token
+        prefs.appTokenExpiresAt = claim.expiresAt
+        val user = repo.me()
+        if (user == null) {
+            prefs.clearSession()
+            _state.update {
+                it.copy(qr = it.qr.copy(status = "error", busy = false, error = Strings(it.lang)["qrFailed"]))
+            }
+            return
+        }
+        _state.update {
+            it.copy(qr = it.qr.copy(status = "approved", busy = false, error = null))
+        }
+        onAuthed(user)
+    }
+
+    /** Достаёт код из dogma://login?code=..., обычной ссылки или ручного ввода. */
+    private fun extractQrCode(raw: String): String {
+        val value = raw.trim()
+        if (value.isBlank()) return ""
+        val uri = runCatching { Uri.parse(value) }.getOrNull()
+        if (uri != null) {
+            val fromQuery = uri.getQueryParameter("code")
+            if (!fromQuery.isNullOrBlank()) return fromQuery.trim()
+        }
+        return value
+    }
+
+    private fun qrErrorText(e: Throwable, s: Strings): String = when (e) {
+        is ApiException -> when (e.code) {
+            "INVALID_CODE", "NOT_FOUND" -> s["qrInvalidCode"]
+            "EXPIRED" -> s["qrExpired"]
+            "CANCELLED" -> s["qrCancelled"]
+            "ALREADY_USED", "ALREADY_SCANNED", "ALREADY_CONFIRMED" -> s["qrAlreadyUsed"]
+            else -> e.details ?: e.message
+        }
+        is NetworkException -> s["errNetwork"]
+        else -> s["qrFailed"]
+    }
+
+    // ── маршрутизация ────────────────────────────────────────────────────────
+
+    fun loadRouting() {
+        viewModelScope.launch {
+            _state.update { it.copy(routing = it.routing.copy(loading = true, error = null)) }
+            try {
+                val response = repo.routing()
+                _state.update {
+                    it.copy(
+                        routing = it.routing.copy(
+                            loading = false,
+                            profile = response.profile,
+                            presets = response.presets,
+                            error = null,
+                        ),
+                    )
+                }
+            } catch (e: Throwable) {
+                _state.update {
+                    it.copy(
+                        routing = it.routing.copy(
+                            loading = false,
+                            error = errorText(e, Strings(it.lang)),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    /** Сохраняет профиль, сразу пересобирает smart-конфиг и перезапускает VPN. */
+    fun saveRouting(profile: RoutingProfile) {
+        if (_state.value.routing.saving) return
+        viewModelScope.launch {
+            _state.update { it.copy(routing = it.routing.copy(saving = true, error = null, saved = false)) }
+            try {
+                val saved = repo.saveRouting(profile)
+                _state.update {
+                    it.copy(
+                        routing = it.routing.copy(
+                            saving = false,
+                            profile = saved,
+                            saved = true,
+                            error = null,
+                        ),
+                    )
+                }
+                applyRoutingNow()
+            } catch (e: Throwable) {
+                _state.update {
+                    it.copy(
+                        routing = it.routing.copy(
+                            saving = false,
+                            saved = false,
+                            error = errorText(e, Strings(it.lang)),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun applyRoutingNow() {
+        val token = _state.value.subscription?.token
+        if (!token.isNullOrBlank()) {
+            val smart = runCatching { repo.smartSubscription(token) }.getOrNull()
+            if (!smart.isNullOrBlank()) prefs.smartConfig = smart
+        }
+        if (VpnRuntime.status.value.state == VpnState.CONNECTED) {
+            runCatching { VpnManager.stop(application) }
+            delay(400)
+            runCatching { VpnManager.start(application) }
+                .onFailure { VpnRuntime.setError(it.message ?: "VPN restart failed") }
         }
     }
 

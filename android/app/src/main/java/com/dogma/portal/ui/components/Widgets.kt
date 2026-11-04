@@ -121,6 +121,9 @@ fun DogmaTopBar(
     onLang: (com.dogma.portal.ui.Lang) -> Unit,
     onServer: () -> Unit,
     modifier: Modifier = Modifier,
+    userInitial: String? = null,
+    profileLabel: String = "",
+    onProfile: (() -> Unit)? = null,
 ) {
     val p = dogmaPalette()
     Row(
@@ -182,6 +185,26 @@ fun DogmaTopBar(
         ) {
             DogmaIcon(DogmaIconKind.GEAR, Modifier.size(18.dp), tint = p.muted)
         }
+        if (userInitial != null && onProfile != null) {
+            Spacer(Modifier.width(4.dp))
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(p.card)
+                    .border(1.dp, p.border, CircleShape)
+                    .clickable(onClick = onProfile)
+                    .semantics { contentDescription = profileLabel },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    userInitial,
+                    color = p.fg,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
     }
 }
 
@@ -191,7 +214,7 @@ enum class DogmaIconKind {
     HOME, SERVERS, SETTINGS, STATS, PROFILE,
     SHIELD, BOLT, POWER, GLOBE, KEY, SUN, GEAR, DEVICES,
     CLOCK, UP, DOWN, CARD, HELP, SEARCH, STAR, SIGNAL,
-    CHEVRON, CHECK, WARN, SEND, CLOSE,
+    CHEVRON, CHECK, WARN, SEND, CLOSE, SCAN,
 }
 
 @Composable
@@ -370,6 +393,14 @@ fun DogmaIcon(
             DogmaIconKind.CLOSE -> {
                 line(5f, 5f, 15f, 15f)
                 line(15f, 5f, 5f, 15f)
+            }
+            DogmaIconKind.SCAN -> {
+                // четыре угла видоискателя + центральная точка
+                line(3f, 7f, 3f, 3f); line(3f, 3f, 7f, 3f)
+                line(13f, 3f, 17f, 3f); line(17f, 3f, 17f, 7f)
+                line(3f, 13f, 3f, 17f); line(3f, 17f, 7f, 17f)
+                line(13f, 17f, 17f, 17f); line(17f, 17f, 17f, 13f)
+                drawCircle(tint, 1.1f * u, o(10f, 10f))
             }
         }
     }
@@ -560,8 +591,8 @@ fun PageTitle(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         color = p.fg,
-        fontSize = 21.sp,
-        fontWeight = FontWeight.SemiBold,
+        fontSize = 22.sp,
+        fontWeight = FontWeight.Medium,
         modifier = modifier,
     )
 }
@@ -592,7 +623,7 @@ fun SettingRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, color = p.fg, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, color = p.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             if (!subtitle.isNullOrBlank()) {
                 Spacer(Modifier.height(2.dp))
                 Text(

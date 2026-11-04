@@ -19,8 +19,8 @@ android {
         applicationId = "com.dogma.portal"
         minSdk = 24
         targetSdk = 33
-        versionCode = 2
-        versionName = "2.0.0"
+        versionCode = 3
+        versionName = "2.1.0"
 
         buildConfigField("String", "PORTAL_BASE_URL", "\"$portalBaseUrl\"")
 
@@ -119,6 +119,9 @@ dependencies {
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.security:security-crypto:1.0.0")
+
+    // Сканер QR для входа из личного кабинета (камера + ручной ввод).
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
     // sing-box (libbox) — реальное ядро Hysteria2.
     implementation(files("libs/libbox.aar"))

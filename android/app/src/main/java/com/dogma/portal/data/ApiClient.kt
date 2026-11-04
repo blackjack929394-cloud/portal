@@ -54,6 +54,9 @@ class ApiClient(private val prefs: Prefs) {
                 prefs.baseUrl + pathOrUrl
             }
             val builder = Request.Builder().url(url)
+            prefs.appToken?.takeIf { it.isNotBlank() }?.let {
+                builder.header("Authorization", "Bearer $it")
+            }
             when (method) {
                 "GET" -> builder.get()
                 "POST" -> builder.post((body ?: "{}").toRequestBody(JSON))
@@ -86,7 +89,7 @@ class ApiClient(private val prefs: Prefs) {
 
     fun setSessionCookie(header: String) = session.setFromHeader(header, prefs.baseUrl)
 
-    fun hasSession(): Boolean = session.hasCookie()
+    fun hasSession(): Boolean = session.hasCookie() || !prefs.appToken.isNullOrBlank()
 
     private fun detailsOf(element: JsonElement?): String? = when (element) {
         null -> null

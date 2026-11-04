@@ -60,6 +60,59 @@ export async function login({ username, password }) {
   return data;
 }
 
+// ── Вход в приложение по QR ──────────────────────────────────────────────────
+// Веб-сессия создаёт QR, приложение сканирует, сайт подтверждает устройство.
+export async function startQrLogin() {
+  const res = await fetch(`${API}/auth/qr/start`, opts({ method: 'POST' }));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data);
+  return data; // { id, code, qrPayload, expiresAt, ttlSeconds }
+}
+
+export async function getQrLogin(id) {
+  const res = await fetch(`${API}/auth/qr/${encodeURIComponent(id)}`, opts());
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data);
+  return data; // { id, status, deviceName, platform, expiresAt, ... }
+}
+
+export async function confirmQrLogin(id) {
+  const res = await fetch(`${API}/auth/qr/${encodeURIComponent(id)}/confirm`, opts({ method: 'POST' }));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data);
+  return data;
+}
+
+export async function cancelQrLogin(id) {
+  const res = await fetch(`${API}/auth/qr/${encodeURIComponent(id)}/cancel`, opts({ method: 'POST' }));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data);
+  return data;
+}
+
+// ── Устройства приложения ───────────────────────────────────────────────────
+export async function getAppDevices() {
+  const res = await fetch(`${API}/auth/app/devices`, opts());
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data);
+  return data.devices || [];
+}
+
+export async function revokeAppDevice(id) {
+  const res = await fetch(`${API}/auth/app/devices/${encodeURIComponent(id)}`, opts({ method: 'DELETE' }));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data);
+  return data;
+}
+
+// ── Клиенты для скачивания (страница /download) ─────────────────────────────
+export async function getClients() {
+  const res = await fetch(`${API}/api/v1/clients`, opts());
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data);
+  return data.clients || [];
+}
+
 // ── VPN (подписки) ───────────────────────────────────────────────────────────
 export async function getMySubscription() {
   const res = await fetch(`${API}/api/v1/vpn/subscription`, opts());

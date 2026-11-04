@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/vpnController.js';
-import { requireAuth } from '../auth/index.js';
+import * as clients from '../controllers/clientController.js';
+import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 
 const router = Router();
@@ -18,6 +19,10 @@ router.post('/chat', requireAuth, ctrl.sendMyChatMessage);
 
 // ── Public client API (no auth, token-based) ─────────────────────────────────
 router.get('/sub/:token', ctrl.getSubscriptionConfig);
+
+// ── Public download metadata (page /download) ────────────────────────────────
+router.get('/clients', clients.listClients);
+router.get('/clients/:id/download', clients.downloadClient);
 
 // ── Admin ────────────────────────────────────────────────────────────────────
 adminRouter.use(requireAdmin);

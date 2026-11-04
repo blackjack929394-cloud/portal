@@ -141,3 +141,20 @@ R80.30/R80.40/R81 (чинился JHF) — проверьте `openssl` пере
 2. Версия Check Point (для точных команд Management API / `cpca_client`).
 3. Автовыпуск или с апрувом.
 4. Пользователи — сотрудники (есть AD) или внешние.
+
+## QR-вход в приложение и страница скачивания
+
+Добавлены две возможности для клиентских приложений Dogma:
+
+- **Вход в приложение по QR.** Сайт создаёт одноразовый код, приложение
+  сканирует его, пользователь подтверждает устройство на сайте, после чего
+  приложение получает Bearer-токен. Миграция:
+  `psql "$DATABASE_URL" -f migrations/004_app_auth.sql`.
+  Полное описание API и сценария — `docs/APP_QR_LOGIN.md`.
+- **Страница `/download`** с клиентами для Android и Windows. Метаданные
+  отдаёт `GET /api/v1/clients`; файлы можно положить в
+  `public/downloads` или задать внешние URL. См. `docs/CLIENT_DOWNLOADS.md`.
+
+Новые переменные окружения: `APP_QR_TTL_SECONDS`, `APP_TOKEN_TTL_DAYS`,
+`APP_LOGIN_DEEPLINK`, `ANDROID_CLIENT_*`, `WINDOWS_CLIENT_*`,
+`CLIENT_DOWNLOAD_DIR` (см. `.env.example`).

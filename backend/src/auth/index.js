@@ -3,8 +3,13 @@ import config from '../config/index.js';
 import logger from '../utils/logger.js';
 import { audit } from '../services/auditService.js';
 import { registerSchema, loginSchema } from '../validators/authValidators.js';
-import { createUser, authenticateUser, upsertEmployee, getEmployeeBySub, isBlocked } from '../store/userDirectory.js';
+import { createUser, authenticateUser, upsertEmployee, getEmployeeBySub } from '../store/userDirectory.js';
 import { createSessionStore } from '../store/sessionStore.js';
+import { attachUser } from '../middleware/auth.js';
+import { mountAppAuth } from './appAuth.js';
+import { revokeAppTokenById } from '../services/appAuthService.js';
+
+export { requireAuth } from '../middleware/auth.js';
 
 // OIDC-клиент создаётся лениво (динамический импорт), чтобы dev-режим не требовал
 // доступного провайдера на старте.
@@ -43,11 +48,18 @@ export function mountAuth(app) {
     }),
   );
 
-  // Кто я сейчас (фронт спрашивает при загрузке)
+  // req.user = cookie-сессия или Bearer-токен приложения.
+  app.use(attachUser);
+
+  // QR-вход для приложения (сканирование на телефоне, подтверждение на сайте).
+  mountAppAuth(app);
+
+  // Кто я сейчас (фронт и приложение спрашивают при загрузке).
   app.get('/auth/me', (req, res) => {
-    if (!req.session.user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
-    const { name, email, kind } = req.session.user;
-    return res.json({ name, email, kind });
+    const user = req.user || req.session?.user;
+    if (!user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
+    const { name, email, kind, via } = user;
+    return res.json({ name, email, kind, via: via || 'web' });
   });
 
   // Доступные способы входа (фронт решает, показывать ли кнопку SSO).
@@ -98,12 +110,24 @@ export function mountAuth(app) {
     return res.json({ name: user.fullName, email: user.email, kind: 'user' });
   });
 
-  app.post('/auth/logout', (req, res) => {
-    const sub = req.session.user?.sub;
-    req.session.destroy(() => {
-      audit('auth.logout', { sub });
-      res.json({ ok: true });
-    });
+  app.post('/auth/logout', async (req, res, next) => {
+    try {
+      const sub = req.user?.sub || req.session?.user?.sub;
+      // Приложение выходит Bearer-токеном — отзываем именно его.
+      if (req.user?.appTokenId) {
+        await revokeAppTokenById(req.user.appTokenId, sub);
+      }
+      if (req.session?.user) {
+        return req.session.destroy(() => {
+          audit('auth.logout', { sub });
+          res.json({ ok: true });
+        });
+      }
+      audit('auth.logout', { sub, via: 'app' });
+      return res.json({ ok: true });
+    } catch (err) {
+      return next(err);
+    }
   });
 
   // SSO (OIDC) — опциональный альтернативный вход, если настроен провайдер.
@@ -162,17 +186,3 @@ function mountOidc(app) {
   });
 }
 
-// Middleware: пускает только аутентифицированных и не заблокированных.
-export function requireAuth(req, res, next) {
-  if (!req.session || !req.session.user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
-  const { sub, kind } = req.session.user;
-  isBlocked(sub, kind)
-    .then((blocked) => {
-      if (blocked) {
-        req.session.destroy(() => {});
-        return res.status(403).json({ error: 'ACCOUNT_BLOCKED' });
-      }
-      next();
-    })
-    .catch(next);
-}

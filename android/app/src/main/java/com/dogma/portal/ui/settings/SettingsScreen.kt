@@ -14,7 +14,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dogma.portal.AppState
@@ -23,7 +22,6 @@ import com.dogma.portal.ui.components.DogmaSwitch
 import com.dogma.portal.ui.components.PageTitle
 import com.dogma.portal.ui.components.SettingRow
 import com.dogma.portal.ui.theme.dogmaPalette
-import com.dogma.portal.util.openExternal
 
 @Composable
 fun SettingsScreen(
@@ -31,10 +29,10 @@ fun SettingsScreen(
     t: Strings,
     onKillSwitch: (Boolean) -> Unit,
     onAutostart: (Boolean) -> Unit,
+    onOpenRouting: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = dogmaPalette()
-    val context = LocalContext.current
     val settings = state.settings
 
     Column(
@@ -64,9 +62,9 @@ fun SettingsScreen(
                     },
                 )
                 SettingRow(
-                    title = t["routingInPortal"],
-                    subtitle = t["routingInPortalHint"],
-                    onClick = { openExternal(context, state.baseUrl) },
+                    title = t["routingTitle"],
+                    subtitle = t["routingInAppHint"],
+                    onClick = onOpenRouting,
                     showChevron = true,
                 )
             }

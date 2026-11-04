@@ -29,7 +29,7 @@ async function configLinkFor(token) {
 // ── User-facing endpoints ────────────────────────────────────────────────────
 
 export async function getMySubscription(req, res) {
-  const user = req.session.user;
+  const user = req.user;
   if (!user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
   const sub = await vpnService.getUserSubscription(user.sub);
   if (!sub) {
@@ -65,14 +65,14 @@ export async function getMySubscription(req, res) {
 // ── Маршрутизация (split tunneling) ──────────────────────────────────────────
 
 export async function getMyRouting(req, res) {
-  const user = req.session.user;
+  const user = req.user;
   if (!user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
   const { userSub, ...profile } = await getProfile(user.sub);
   return res.json({ profile, presets: PRESETS.map(({ id, label }) => ({ id, label })) });
 }
 
 export async function updateMyRouting(req, res) {
-  const user = req.session.user;
+  const user = req.user;
   if (!user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
   const result = await saveProfile(user.sub, req.body || {});
   if (result.error) return res.status(400).json({ error: result.error, details: result.details });
@@ -89,7 +89,7 @@ function parsePositiveInt(value, fallback) {
 }
 
 export async function createSubscription(req, res) {
-  const user = req.session.user;
+  const user = req.user;
   if (!user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
   const { ttlDays, trafficLimitGb } = req.body || {};
 
@@ -130,7 +130,7 @@ export async function createSubscription(req, res) {
 }
 
 export async function revokeMySubscription(req, res) {
-  const user = req.session.user;
+  const user = req.user;
   if (!user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
   const sub = await vpnService.getUserSubscription(user.sub);
   if (!sub) return res.status(404).json({ error: 'NO_SUBSCRIPTION' });
@@ -142,20 +142,20 @@ export async function revokeMySubscription(req, res) {
 
 // Пользователь: своя переписка. Открытие помечает ответы админа прочитанными.
 export async function getMyChat(req, res) {
-  const user = req.session.user;
+  const user = req.user;
   if (!user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
   await chatStore.markReadByUser(user.sub);
   return res.json({ messages: await chatStore.listByUser(user.sub) });
 }
 
 export async function getMyChatUnread(req, res) {
-  const user = req.session.user;
+  const user = req.user;
   if (!user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
   return res.json({ unread: await chatStore.unreadForUser(user.sub) });
 }
 
 export async function sendMyChatMessage(req, res) {
-  const user = req.session.user;
+  const user = req.user;
   if (!user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
   const text = (req.body?.text || '').toString().trim();
   if (text.length < 1) return res.status(400).json({ error: 'MESSAGE_EMPTY' });

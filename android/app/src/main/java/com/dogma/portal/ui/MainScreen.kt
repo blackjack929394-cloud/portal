@@ -61,6 +61,7 @@ fun MainScreen(
     onAutostart: (Boolean) -> Unit,
     onLogout: () -> Unit,
     onRefreshStats: () -> Unit,
+    onOpenRouting: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = dogmaPalette()
@@ -92,6 +93,7 @@ fun MainScreen(
                         t = t,
                         onKillSwitch = onKillSwitch,
                         onAutostart = onAutostart,
+                        onOpenRouting = onOpenRouting,
                     )
                     Tab.STATS -> StatsScreen(
                         state = state,

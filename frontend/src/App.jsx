@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { makeT } from './i18n.js';
 import {
   apiBase,
@@ -16,18 +16,22 @@ import {
   sendMyChatMessage,
   getRouting,
   saveRouting,
+  getAppDevices,
+  revokeAppDevice,
   ApiError,
 } from './api.js';
 import QRCode from 'qrcode';
 import DogmaLogo from './components/DogmaLogo.jsx';
+import AppLoginModal from './components/AppLoginModal.jsx';
 
 const STEP_INDEX = { form: 0, denied: 0, issuing: 1, pending: 1, routing: 2, ready: 3, error: 1 };
 
 export default function App() {
   const [lang, setLang] = useState('ru');
-  const t = makeT(lang);
+  const t = useMemo(() => makeT(lang), [lang]);
 
   const [auth, setAuth] = useState(null);
+  const [qrOpen, setQrOpen] = useState(false);
   const [bootError, setBootError] = useState(false);
   const [loginView, setLoginView] = useState('login'); // login | register
   const [ssoAvailable, setSsoAvailable] = useState(false);
@@ -54,6 +58,7 @@ export default function App() {
   const [copied, setCopied] = useState(false);
 
   const fullName = auth && auth !== false ? auth.name : '';
+  const closeQrModal = useCallback(() => setQrOpen(false), []);
 
   // 401 — это «не авторизован». Любая другая ошибка (429, сеть) не должна
   // выглядеть как выход из аккаунта, поэтому показываем отдельное состояние.
@@ -248,6 +253,42 @@ export default function App() {
     reset();
   }
 
+  // ── личный кабинет ─────────────────────────────────────────────────────────
+  const [cabinetTab, setCabinetTab] = useState('overview');
+  const [devices, setDevices] = useState([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [devicesError, setDevicesError] = useState('');
+  const [routingProfile, setRoutingProfile] = useState(null);
+  const [routingPresets, setRoutingPresets] = useState([]);
+
+  function loadDevices() {
+    setDevicesLoading(true);
+    setDevicesError('');
+    getAppDevices()
+      .then(setDevices)
+      .catch(() => setDevicesError(t('devicesLoadError')))
+      .finally(() => setDevicesLoading(false));
+  }
+
+  useEffect(() => {
+    if (!auth || auth === false || phase !== 'ready') return;
+    loadDevices();
+    getRouting().then((d) => {
+      setRoutingProfile(d.profile);
+      setRoutingPresets(d.presets || []);
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth, phase]);
+
+  async function onRevokeDevice(id) {
+    try {
+      await revokeAppDevice(id);
+      setDevices((prev) => prev.filter((d) => d.id !== id));
+    } catch {
+      setDevicesError(t('devicesRevokeError'));
+    }
+  }
+
   const step = STEP_INDEX[phase];
   const regValid = lastName.trim().length >= 2
     && firstName.trim().length >= 1
@@ -264,6 +305,21 @@ export default function App() {
           <span className="brand-tag">{t('brandTag')}</span>
         </div>
         <div className="topbar-right">
+          <nav className="topbar-nav" aria-label={t('navLabel')}>
+            <a className="topbar-link is-current" href="/" aria-current="page">{t('cabinetNav')}</a>
+            <a className="topbar-link" href="/download">{t('downloadNav')}</a>
+          </nav>
+          {auth && auth !== false && (
+            <button className="topbar-btn" onClick={() => setQrOpen(true)} title={t('appQrOpen')}>
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <rect x="3" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.7" />
+                <rect x="14" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.7" />
+                <rect x="3" y="14" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.7" />
+                <path d="M14 14h3v3h-3zM19 14h2v2h-2zM14 19h2v2h-2zM18 18h3v3h-3z" fill="currentColor" />
+              </svg>
+              <span>{t('appQrOpen')}</span>
+            </button>
+          )}
           {auth && auth !== false && (
             <button className="user-chip" onClick={onLogout} title={t('logout')}>
               <span className="user-name">{auth.name} · </span>{t('logout')}
@@ -277,7 +333,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="stage">
+      <main className={`stage${auth && auth !== false && phase === 'ready' && sub ? ' stage-cabinet' : ''}`}>
         {auth === null && (
           <section className="panel"><div className="center"><div className="pulse" /><p className="lead" style={{ marginTop: 18 }}>{t('authLoading')}</p></div></section>
         )}
@@ -367,7 +423,35 @@ export default function App() {
           </div>
         )}
 
-        {auth && auth !== false && (
+        {auth && auth !== false && phase === 'ready' && sub && (
+          <Cabinet
+            t={t}
+            auth={auth}
+            sub={sub}
+            format={format}
+            onFormat={setFormat}
+            importUrl={importUrl}
+            qrDataUrl={qrDataUrl}
+            copied={copied}
+            onCopy={onCopy}
+            onRevoke={onRevoke}
+            onOpenQr={() => setQrOpen(true)}
+            onLogout={onLogout}
+            tab={cabinetTab}
+            onTab={setCabinetTab}
+            devices={devices}
+            devicesLoading={devicesLoading}
+            devicesError={devicesError}
+            onReloadDevices={loadDevices}
+            onRevokeDevice={onRevokeDevice}
+            routingProfile={routingProfile}
+            routingPresets={routingPresets}
+            onRoutingSaved={setRoutingProfile}
+            lang={lang}
+          />
+        )}
+
+        {auth && auth !== false && phase !== 'ready' && (
           <div className="client">
             <ol className="rail" aria-label="progress">
               {t('steps').map((label, i) => (
@@ -450,59 +534,6 @@ export default function App() {
                 </div>
               )}
 
-              {phase === 'ready' && sub && (
-                <div>
-                  <div className="report-head">
-                    <div className="seal sm" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" width="22" height="22">
-                        <path d="M5 12.5l4.5 4.5L19 7" fill="none" stroke="currentColor"
-                          strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h1 className="title" style={{ margin: 0 }}>{t('readyTitle')}</h1>
-                      <p className="issued-to" style={{ margin: '4px 0 0' }}>
-                        {t('readyForName')} <strong>{fullName}</strong>
-                      </p>
-                    </div>
-                    <span className="status"><span className="status-dot" />{t('subActive')}</span>
-                  </div>
-
-                  <div className="keybox">
-                    <span className="field-label">{format === 'enc' ? t('encSubLabel') : format === 'singbox' ? t('smartSubLabel') : t('simpleSubLabel')}</span>
-                    <div className="key-row">
-                      <code className="key">{importUrl}</code>
-                      <button className="btn ghost" onClick={() => onCopy(importUrl)}>
-                        {copied ? t('copied') : t('copy')}
-                      </button>
-                    </div>
-                  </div>
-
-                  {qrDataUrl && (
-                    <div className="qr-block">
-                      <img src={qrDataUrl} alt={t('qrHint')} />
-                      <p className="note">{t('qrHint')}</p>
-                    </div>
-                  )}
-
-                  <div className="center" style={{ marginTop: 16 }}>
-                    <button className="btn link" onClick={() => setPhase('routing')}>{t('changeRouting')}</button>
-                  </div>
-
-                  <h2 className="subhead">{t('nextSteps')}</h2>
-                  <ol className="steps">
-                    {t('vpnSteps').map((stepText, i) => (
-                      <li key={i}><span className="step-n">{i + 1}</span><span>{stepText}</span></li>
-                    ))}
-                  </ol>
-
-                  <div className="center" style={{ marginTop: 20, display: 'flex', gap: 12, justifyContent: 'center' }}>
-                    <button className="btn ghost" onClick={onRevoke}>{t('revokeVpn')}</button>
-                    <button className="btn link" onClick={reset}>{t('again')}</button>
-                  </div>
-                </div>
-              )}
-
               {phase === 'error' && (
                 <div className="center">
                   <div className="seal err" aria-hidden="true">!</div>
@@ -517,6 +548,9 @@ export default function App() {
       </main>
 
       {auth && auth !== false && <ChatWidget t={t} />}
+      {qrOpen && auth && auth !== false && (
+        <AppLoginModal t={t} onClose={closeQrModal} />
+      )}
     </div>
   );
 }
@@ -563,6 +597,343 @@ function Badge({ state, big, children }) {
 // disabled — выбран формат без правил (маршрутизация не применится);
 // onSaved — вызвать после успешного сохранения (переход к шагу «Готово»);
 // primaryLabel — надпись на основной кнопке.
+// ── Полноценный личный кабинет ───────────────────────────────────────────────
+
+const CABINET_TABS = [
+  ['overview', 'cabinetOverview', 'grid'],
+  ['subscription', 'cabinetSubscription', 'key'],
+  ['routing', 'cabinetRouting', 'route'],
+  ['devices', 'cabinetDevices', 'devices'],
+  ['instructions', 'cabinetInstructions', 'book'],
+];
+
+const CABINET_ICONS = {
+  grid: (
+    <>
+      <rect x="3" y="3" width="6.5" height="6.5" rx="1" />
+      <rect x="12.5" y="3" width="6.5" height="6.5" rx="1" />
+      <rect x="3" y="12.5" width="6.5" height="6.5" rx="1" />
+      <rect x="12.5" y="12.5" width="6.5" height="6.5" rx="1" />
+    </>
+  ),
+  key: (
+    <>
+      <circle cx="7.5" cy="14" r="3.5" />
+      <path d="m10 11.5 7-7M14.5 7l2.5 2.5" />
+    </>
+  ),
+  route: (
+    <>
+      <circle cx="5" cy="5.5" r="2" />
+      <circle cx="17" cy="17.5" r="2" />
+      <path d="M7 5.5h5a3 3 0 0 1 0 6h-1a3 3 0 0 0 0 6h4" />
+    </>
+  ),
+  devices: (
+    <>
+      <rect x="3" y="4" width="11" height="8" rx="1.5" />
+      <rect x="15" y="8" width="5" height="10" rx="1.5" />
+      <path d="M6 15.5h5" />
+    </>
+  ),
+  book: (
+    <>
+      <path d="M4 4.5h6a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H4z" />
+      <path d="M20 4.5h-4a3 3 0 0 0-3 3v12a2.5 2.5 0 0 1 2.5-2.5H20z" />
+    </>
+  ),
+};
+
+function CabinetIcon({ name }) {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {CABINET_ICONS[name]}
+    </svg>
+  );
+}
+
+function formatDay(value, lang) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString(lang === 'en' ? 'en-GB' : 'ru-RU', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+}
+
+function formatTraffic(used, limit, t) {
+  if (!limit) return t('cabinetNoLimit');
+  const u = Number(used || 0);
+  return `${u.toFixed(1)} / ${limit} GB`;
+}
+
+function Cabinet({
+  t, auth, sub, format, onFormat, importUrl, qrDataUrl, copied, onCopy,
+  onRevoke, onOpenQr, onLogout, tab, onTab,
+  devices, devicesLoading, devicesError, onReloadDevices, onRevokeDevice,
+  routingProfile, routingPresets, onRoutingSaved, lang,
+}) {
+  const initial = (auth.name || auth.email || '?').trim().charAt(0).toUpperCase();
+  const expires = formatDay(sub.expiresAt, lang);
+  const presetLabels = (routingProfile?.presets || [])
+    .map((id) => routingPresets.find((p) => p.id === id)?.label)
+    .filter(Boolean);
+  const currentTitle = {
+    overview: t('cabinetOverviewTitle'),
+    subscription: t('cabinetSubscriptionTitle'),
+    routing: t('routingTitle'),
+    devices: t('cabinetDevicesTitle'),
+    instructions: t('instructionsTitle'),
+  }[tab];
+
+  return (
+    <div className="cabinet">
+      <aside className="cabinet-side">
+        <div className="cabinet-user">
+          <span className="cabinet-avatar">{initial}</span>
+          <div>
+            <div className="cabinet-user-name">{auth.name || auth.email}</div>
+            {auth.name && auth.email && <div className="cabinet-user-mail">{auth.email}</div>}
+          </div>
+        </div>
+
+        <nav className="cabinet-nav" aria-label={t('cabinetTitle')}>
+          {CABINET_TABS.map(([id, label, icon]) => (
+            <button
+              key={id}
+              className={`cabinet-nav-item${tab === id ? ' on' : ''}`}
+              onClick={() => onTab(id)}
+              aria-current={tab === id ? 'page' : undefined}
+            >
+              <CabinetIcon name={icon} />
+              <span>{t(label)}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="cabinet-side-status">
+          <span className="cabinet-side-label">{t('cabinetSubscription')}</span>
+          <span className="cabinet-status"><span className="status-dot" />{t('subActive')}</span>
+          <span className="cabinet-side-meta">
+            {expires ? `${t('cabinetUntil')} ${expires}` : t('cabinetNoExpiry')}
+          </span>
+        </div>
+
+        <div className="cabinet-side-actions">
+          <a className="btn ghost" href="/download">{t('downloadNav')}</a>
+          <button className="btn primary" onClick={onOpenQr}>{t('appQrOpen')}</button>
+          <button className="btn link cabinet-logout" onClick={onLogout}>{t('logout')}</button>
+        </div>
+      </aside>
+
+      <div className="cabinet-main">
+        <header className="cabinet-head">
+          <div>
+            <span className="eyebrow">{t('cabinetTitle')}</span>
+            <h1 className="cabinet-title">{currentTitle}</h1>
+          </div>
+          <span className="status"><span className="status-dot" />{t('subActive')}</span>
+        </header>
+
+        {tab === 'overview' && (
+          <div className="cabinet-grid">
+            <section className="cabinet-hero">
+              <div className="cabinet-hero-top">
+                <div>
+                  <span className="cabinet-kicker">{t('cabinetSubscription')}</span>
+                  <div className="cabinet-hero-status">{t('subActive')}</div>
+                </div>
+              </div>
+
+              <dl className="cabinet-stats">
+                <div>
+                  <dt>{t('cabinetUntil')}</dt>
+                  <dd>{expires || t('cabinetNoExpiry')}</dd>
+                </div>
+                <div>
+                  <dt>{t('cabinetTraffic')}</dt>
+                  <dd>{formatTraffic(sub.trafficUsedGb, sub.trafficLimitGb, t)}</dd>
+                </div>
+                <div>
+                  <dt>{t('cabinetServers')}</dt>
+                  <dd>{sub.activeNodeCount ?? '—'}</dd>
+                </div>
+              </dl>
+
+              <div className="keybox cabinet-keybox">
+                <span className="field-label">{t('cabinetKey')}</span>
+                <div className="key-row">
+                  <code className="key">{importUrl}</code>
+                  <button className="btn ghost" onClick={() => onCopy(importUrl)}>
+                    {copied ? t('copied') : t('copy')}
+                  </button>
+                </div>
+              </div>
+
+              <div className="cabinet-hero-foot">
+                <button className="btn primary" onClick={() => onTab('subscription')}>{t('cabinetOpenSub')}</button>
+                <button className="btn ghost" onClick={onOpenQr}>{t('appQrOpen')}</button>
+              </div>
+            </section>
+
+            <div className="cabinet-side-col">
+              <section className="cabinet-card">
+                <span className="cabinet-kicker">{t('appCardKicker')}</span>
+                <h2 className="cabinet-card-title">{t('appCardTitle')}</h2>
+                <p className="cabinet-card-lead">{t('appCardLead')}</p>
+                <div className="cabinet-card-actions">
+                  <a className="btn ghost" href="/download">{t('downloadNav')}</a>
+                  <button className="btn primary" onClick={onOpenQr}>{t('appQrOpen')}</button>
+                </div>
+              </section>
+
+              <section className="cabinet-card">
+                <span className="cabinet-kicker">{t('routingTitle')}</span>
+                <h2 className="cabinet-card-title">
+                  {routingProfile?.mode === 'selective' ? t('routingModeSelective') : t('routingModeGlobal')}
+                </h2>
+                <p className="cabinet-card-lead">
+                  {routingProfile?.mode === 'selective'
+                    ? (presetLabels.length ? presetLabels.slice(0, 4).join(' · ') : t('cabinetRoutingNone'))
+                    : t('routingModeGlobalHint')}
+                </p>
+                <div className="cabinet-card-actions">
+                  <button className="btn ghost" onClick={() => onTab('routing')}>{t('cabinetEdit')}</button>
+                </div>
+              </section>
+            </div>
+
+            <section className="cabinet-card cabinet-wide">
+              <details className="instructions cabinet-instructions">
+                <summary>
+                  <span className="instructions-title">{t('instructionsTitle')}</span>
+                  <span className="instructions-hint">{t('instructionsHint')}</span>
+                </summary>
+                <ol className="steps">
+                  {t('vpnSteps').map((stepText, i) => (
+                    <li key={i}><span className="step-n">{i + 1}</span><span>{stepText}</span></li>
+                  ))}
+                </ol>
+              </details>
+            </section>
+          </div>
+        )}
+
+        {tab === 'subscription' && (
+          <div className="cabinet-grid">
+            <section className="cabinet-hero">
+              <span className="cabinet-kicker">{t('cabinetFormat')}</span>
+              <div className="fmt-list cabinet-formats" role="radiogroup">
+                {[...(sub.secureSubscriptionUrl ? ['enc'] : []), 'singbox', 'sub', 'link'].map((f) => (
+                  <label key={f} className={`fmt-opt${format === f ? ' on' : ''}`}>
+                    <input type="radio" name="cabinet-format" checked={format === f} onChange={() => onFormat(f)} />
+                    <span className="fmt-opt-title">{t(`fmt_${f}`)}</span>
+                    <span className="fmt-opt-hint">{t(`fmt_${f}_hint`)}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="keybox cabinet-keybox">
+                <span className="field-label">{t('cabinetKey')}</span>
+                <div className="key-row">
+                  <code className="key">{importUrl}</code>
+                  <button className="btn ghost" onClick={() => onCopy(importUrl)}>
+                    {copied ? t('copied') : t('copy')}
+                  </button>
+                </div>
+                <p className="note">{t('cabinetLinkHint')}</p>
+              </div>
+
+              <div className="center" style={{ marginTop: 20 }}>
+                <button className="btn ghost" onClick={onRevoke}>{t('revokeVpn')}</button>
+              </div>
+            </section>
+
+            <section className="cabinet-card cabinet-qr-card">
+              <span className="cabinet-kicker">{t('qrHint')}</span>
+              {qrDataUrl
+                ? <img className="cabinet-qr" src={qrDataUrl} alt={t('qrHint')} />
+                : <div className="cabinet-qr-placeholder" />}
+            </section>
+          </div>
+        )}
+
+        {tab === 'routing' && (
+          <section className="cabinet-card cabinet-wide">
+            <RoutingPanel
+              t={t}
+              primaryLabel={t('routingSave')}
+              onSaved={onRoutingSaved}
+            />
+          </section>
+        )}
+
+        {tab === 'devices' && (
+          <section className="cabinet-card cabinet-wide">
+            <div className="cabinet-section-head">
+              <div>
+                <h2 className="cabinet-card-title">{t('cabinetDevicesListTitle')}</h2>
+                <p className="cabinet-card-lead">{t('cabinetDevicesLead')}</p>
+              </div>
+              <button className="btn ghost" onClick={onReloadDevices}>{t('cabinetRefresh')}</button>
+            </div>
+
+            {devicesError && <p className="note err-text">{devicesError}</p>}
+            {devicesLoading && <p className="note">{t('authLoading')}</p>}
+
+            {!devicesLoading && !devicesError && devices.length === 0 && (
+              <div className="cabinet-empty">
+                <p className="cabinet-card-title">{t('cabinetDevicesEmpty')}</p>
+                <p className="cabinet-card-lead">{t('cabinetDevicesEmptyLead')}</p>
+                <button className="btn primary" onClick={onOpenQr}>{t('appQrOpen')}</button>
+              </div>
+            )}
+
+            {devices.length > 0 && (
+              <ul className="device-list">
+                {devices.map((device) => (
+                  <li key={device.id} className="device-row">
+                    <span className="device-mark" aria-hidden="true">
+                      {String(device.platform || '?').slice(0, 1).toUpperCase()}
+                    </span>
+                    <div className="device-info">
+                      <span className="device-name">
+                        {device.deviceName || device.platform || t('cabinetDeviceAdded')}
+                      </span>
+                      <span className="device-meta">
+                        {[
+                          device.platform,
+                          device.appVersion && `v${device.appVersion}`,
+                          device.lastUsedAt && `${t('cabinetDeviceLastUsed')} ${formatDay(device.lastUsedAt, lang)}`,
+                        ].filter(Boolean).join(' · ')}
+                      </span>
+                    </div>
+                    <button className="btn link device-revoke" onClick={() => onRevokeDevice(device.id)}>
+                      {t('cabinetRevokeDevice')}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
+        {tab === 'instructions' && (
+          <section className="cabinet-card cabinet-wide">
+            <p className="cabinet-card-lead">{t('cabinetInstructionLead')}</p>
+            <ol className="steps">
+              {t('vpnSteps').map((stepText, i) => (
+                <li key={i}><span className="step-n">{i + 1}</span><span>{stepText}</span></li>
+              ))}
+            </ol>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function RoutingPanel({ t, disabled = false, primaryLabel, onSaved }) {
   const [presets, setPresets] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -610,7 +981,7 @@ function RoutingPanel({ t, disabled = false, primaryLabel, onSaved }) {
       // Показ нормализованных значений (punycode, без дублей).
       setProxyDomains((profile.proxyDomains || []).join('\n'));
       setDirectDomains((profile.directDomains || []).join('\n'));
-      if (onSaved) { onSaved(); return; }
+      onSaved?.(profile);
       setSaved(true);
       setTimeout(() => setSaved(false), 6000);
     } catch (e) {

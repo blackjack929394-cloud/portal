@@ -52,6 +52,7 @@ fun AuthScreen(
     onRetry: () -> Unit,
     onClearError: () -> Unit,
     onSso: () -> Unit,
+    onQr: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = dogmaPalette()
@@ -119,6 +120,7 @@ fun AuthScreen(
                         onRegister = onRegister,
                         onClearError = onClearError,
                         onSso = onSso,
+                        onQr = onQr,
                     )
                 }
             }
@@ -134,6 +136,7 @@ private fun AuthForm(
     onRegister: (fullName: String, email: String, username: String, password: String) -> Unit,
     onClearError: () -> Unit,
     onSso: () -> Unit,
+    onQr: () -> Unit,
 ) {
     val p = dogmaPalette()
     var registerMode by rememberSaveable { mutableStateOf(false) }
@@ -309,6 +312,23 @@ private fun AuthForm(
                 },
             )
         }
+
+        Spacer(Modifier.height(14.dp))
+        OutlineButton(
+            text = t["qrLoginButton"],
+            onClick = onQr,
+            fillWidth = true,
+            enabled = !state.authBusy,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = t["qrLoginHint"],
+            color = p.muted,
+            fontSize = 12.sp,
+            lineHeight = 17.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

@@ -55,6 +55,29 @@ class PortalRepository(private val prefs: Prefs) {
         api.clearSession()
     }
 
+    // ── Вход по QR ───────────────────────────────────────────────────────────
+
+    suspend fun qrScan(code: String, deviceName: String, platform: String, appVersion: String): QrSession {
+        val body = buildJsonObject {
+            put("code", code)
+            put("deviceName", deviceName)
+            put("platform", platform)
+            put("appVersion", appVersion)
+        }.toString()
+        return json.decodeFromString(api.request("POST", "/auth/app/qr/scan", body))
+    }
+
+    suspend fun qrStatus(code: String): QrSession =
+        json.decodeFromString(api.request("GET", "/auth/app/qr/status?code=${encode(code)}"))
+
+    suspend fun qrClaim(code: String): QrClaim {
+        val body = buildJsonObject { put("code", code) }.toString()
+        return json.decodeFromString(api.request("POST", "/auth/app/qr/claim", body))
+    }
+
+    private fun encode(value: String): String =
+        java.net.URLEncoder.encode(value, "UTF-8")
+
     suspend fun subscription(): Subscription? = try {
         json.decodeFromString(api.request("GET", "/api/v1/vpn/subscription"))
     } catch (e: ApiException) {

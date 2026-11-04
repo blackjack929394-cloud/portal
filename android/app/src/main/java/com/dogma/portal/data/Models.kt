@@ -5,7 +5,7 @@ import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class User(
-    val name: String = "",
+    val name: String? = null,
     val email: String? = null,
     val kind: String? = null,
 )
@@ -59,6 +59,35 @@ data class ChatResponse(val messages: List<ChatMessage> = emptyList())
 
 @Serializable
 data class UnreadResponse(val unread: Int = 0)
+
+// ── QR-вход из личного кабинета ─────────────────────────────────────────────
+
+/** В QR-сессиях имя/почта могут быть null — не переиспользуем строгий User. */
+@Serializable
+data class QrUser(
+    val name: String? = null,
+    val email: String? = null,
+    val kind: String? = null,
+)
+
+@Serializable
+data class QrSession(
+    val id: String = "",
+    val status: String = "",
+    val deviceName: String? = null,
+    val platform: String? = null,
+    val appVersion: String? = null,
+    val expiresAt: String? = null,
+    val user: QrUser? = null,
+)
+
+@Serializable
+data class QrClaim(
+    val token: String = "",
+    val tokenType: String = "Bearer",
+    val expiresAt: String? = null,
+    val user: QrUser? = null,
+)
 
 @Serializable
 data class ApiErrorBody(

@@ -40,6 +40,15 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_COOKIE, null)
         set(value) = sp.edit().putString(KEY_COOKIE, value).apply()
 
+    /** Bearer-токен, полученный после входа по QR. */
+    var appToken: String?
+        get() = sp.getString(KEY_APP_TOKEN, null)
+        set(value) = sp.edit().putString(KEY_APP_TOKEN, value).apply()
+
+    var appTokenExpiresAt: String?
+        get() = sp.getString(KEY_APP_TOKEN_EXPIRES, null)
+        set(value) = sp.edit().putString(KEY_APP_TOKEN_EXPIRES, value).apply()
+
     // ── настройки VPN-клиента ────────────────────────────────────────────────
 
     var theme: String
@@ -100,7 +109,13 @@ class Prefs(context: Context) {
     )
 
     fun clearSession() {
-        sp.edit().remove(KEY_COOKIE).remove(KEY_USER_NAME).remove(KEY_USER_EMAIL).apply()
+        sp.edit()
+            .remove(KEY_COOKIE)
+            .remove(KEY_APP_TOKEN)
+            .remove(KEY_APP_TOKEN_EXPIRES)
+            .remove(KEY_USER_NAME)
+            .remove(KEY_USER_EMAIL)
+            .apply()
     }
 
     fun encodeCookie(cookie: Cookie): String = listOf(
@@ -137,6 +152,8 @@ class Prefs(context: Context) {
         private const val KEY_BASE_URL = "base_url"
         private const val KEY_LANG = "lang"
         private const val KEY_COOKIE = "cookie"
+        private const val KEY_APP_TOKEN = "app_token"
+        private const val KEY_APP_TOKEN_EXPIRES = "app_token_expires"
         private const val KEY_USER_NAME = "user_name"
         private const val KEY_USER_EMAIL = "user_email"
         private const val KEY_THEME = "theme"

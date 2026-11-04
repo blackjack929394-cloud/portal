@@ -2,6 +2,7 @@ package com.dogma.portal
 
 import android.app.Activity
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -29,7 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.activity.viewModels
 import com.dogma.portal.ui.MainScreen
 import com.dogma.portal.ui.Strings
 import com.dogma.portal.ui.Tab
@@ -38,22 +39,38 @@ import com.dogma.portal.ui.auth.SsoDialog
 import com.dogma.portal.ui.chat.ChatScreen
 import com.dogma.portal.ui.components.DogmaTopBar
 import com.dogma.portal.ui.components.ServerDialog
+import com.dogma.portal.ui.qr.QrLoginScreen
+import com.dogma.portal.ui.routing.RoutingScreen
 import com.dogma.portal.ui.theme.DogmaTheme
 import com.dogma.portal.ui.theme.dogmaPalette
 import com.dogma.portal.vpn.VpnManager
 import com.dogma.portal.vpn.VpnRuntime
 
 class MainActivity : ComponentActivity() {
+    private val appVm: AppViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleDeepLink(intent)
         setContent {
-            DogmaRoot()
+            DogmaRoot(vm = appVm)
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    private fun handleDeepLink(intent: Intent?) {
+        val data = intent?.dataString ?: return
+        if (intent.data != null) appVm.handleDeepLink(data)
     }
 }
 
 @Composable
-private fun DogmaRoot(vm: AppViewModel = viewModel()) {
+private fun DogmaRoot(vm: AppViewModel) {
     val state by vm.state.collectAsState()
     val vpn by VpnRuntime.status.collectAsState()
     val t = remember(state.lang) { Strings(state.lang) }
@@ -76,6 +93,7 @@ private fun RootContent(
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     var showServer by rememberSaveable { mutableStateOf(false) }
     var showSso by rememberSaveable { mutableStateOf(false) }
+    var showRouting by rememberSaveable { mutableStateOf(false) }
 
     SideEffect {
         val window = (context as? Activity)?.window ?: return@SideEffect
@@ -111,8 +129,12 @@ private fun RootContent(
         if (intent == null) vm.startVpn() else vpnLauncher.launch(intent)
     }
 
+    BackHandler(enabled = state.qr.open) { vm.closeQr() }
+    BackHandler(enabled = !state.qr.open && showRouting) { showRouting = false }
     BackHandler(enabled = state.chat.open) { vm.closeChat() }
-    BackHandler(enabled = !state.chat.open && tab != Tab.HOME) { tab = Tab.HOME }
+    BackHandler(enabled = !state.qr.open && !showRouting && !state.chat.open && tab != Tab.HOME) {
+        tab = Tab.HOME
+    }
 
     Box(Modifier.fillMaxSize().background(p.bg)) {
         Column(Modifier.fillMaxSize()) {
@@ -122,6 +144,11 @@ private fun RootContent(
                 serverLabel = t["serverTitle"],
                 onLang = vm::setLang,
                 onServer = { showServer = true },
+                userInitial = state.user?.let {
+                    (it.name ?: it.email)?.firstOrNull { c -> c.isLetterOrDigit() }?.uppercase()
+                },
+                profileLabel = t["tabProfile"],
+                onProfile = { tab = Tab.PROFILE },
             )
             Box(Modifier.weight(1f).fillMaxSize()) {
                 if (state.user == null) {
@@ -133,6 +160,7 @@ private fun RootContent(
                         onRetry = vm::bootstrap,
                         onClearError = vm::clearAuthError,
                         onSso = { showSso = true },
+                        onQr = vm::openQr,
                     )
                 } else {
                     MainScreen(
@@ -156,6 +184,10 @@ private fun RootContent(
                         onAutostart = vm::setAutostart,
                         onLogout = vm::logout,
                         onRefreshStats = vm::refreshStats,
+                        onOpenRouting = {
+                            showRouting = true
+                            vm.loadRouting()
+                        },
                     )
                 }
             }
@@ -168,6 +200,24 @@ private fun RootContent(
                 onClose = vm::closeChat,
                 onRefresh = vm::refreshChat,
                 onSend = vm::sendChat,
+            )
+        }
+
+        if (state.qr.open) {
+            QrLoginScreen(
+                qr = state.qr,
+                t = t,
+                onClose = vm::closeQr,
+                onSubmitCode = vm::submitQrCode,
+            )
+        }
+
+        if (showRouting) {
+            RoutingScreen(
+                state = state.routing,
+                t = t,
+                onBack = { showRouting = false },
+                onSave = vm::saveRouting,
             )
         }
     }

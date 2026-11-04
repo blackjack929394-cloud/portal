@@ -44,6 +44,34 @@ const config = {
       redirectUri: process.env.OIDC_REDIRECT_URI || 'http://localhost:8080/auth/callback',
     },
   },
+  // Вход в мобильное/десктопное приложение по QR с веб-портала.
+  // QR живёт недолго; после подтверждения на сайте приложение получает
+  // долгоживущий Bearer-токен (хранится в БД только в виде хэша).
+  appAuth: {
+    qrTtlSeconds: intFromEnv('APP_QR_TTL_SECONDS', 180, { min: 30 }),
+    tokenTtlDays: intFromEnv('APP_TOKEN_TTL_DAYS', 90, { min: 1 }),
+    // Шаблон deep-link, который кодируется в QR. `{code}` заменяется на код.
+    // Приложение должно уметь разбирать этот адрес.
+    deepLinkTemplate: process.env.APP_LOGIN_DEEPLINK || 'dogma://login?code={code}',
+  },
+  // Страница /download и API метаданных клиентов.
+  // URL можно задать внешним (GitHub Releases, CDN) или просто положить
+  // установочные файлы в public/downloads — сервис найдёт самый свежий.
+  clients: {
+    downloadDir: process.env.CLIENT_DOWNLOAD_DIR || '',
+    android: {
+      url: process.env.ANDROID_CLIENT_URL || '',
+      version: process.env.ANDROID_CLIENT_VERSION || '',
+      requirements: process.env.ANDROID_CLIENT_REQUIREMENTS || 'Android 8.0+',
+      sha256: process.env.ANDROID_CLIENT_SHA256 || '',
+    },
+    windows: {
+      url: process.env.WINDOWS_CLIENT_URL || '',
+      version: process.env.WINDOWS_CLIENT_VERSION || '',
+      requirements: process.env.WINDOWS_CLIENT_REQUIREMENTS || 'Windows 10/11 (x64)',
+      sha256: process.env.WINDOWS_CLIENT_SHA256 || '',
+    },
+  },
   vpn: {
     defaultTtlDays: parseInt(process.env.VPN_DEFAULT_TTL_DAYS || '30', 10),
     defaultTrafficLimitGb: process.env.VPN_DEFAULT_TRAFFIC_LIMIT_GB

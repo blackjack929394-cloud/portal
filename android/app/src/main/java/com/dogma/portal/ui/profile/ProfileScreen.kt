@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,7 @@ import com.dogma.portal.ui.components.PageTitle
 import com.dogma.portal.ui.components.SettingRow
 import com.dogma.portal.ui.theme.dogmaPalette
 import com.dogma.portal.util.formatDate
+import com.dogma.portal.util.openExternal
 
 @Composable
 fun ProfileScreen(
@@ -44,6 +46,7 @@ fun ProfileScreen(
     modifier: Modifier = Modifier,
 ) {
     val p = dogmaPalette()
+    val context = LocalContext.current
     val status = state.subStatus
     val displayName = state.user?.name?.takeIf { it.isNotBlank() }
         ?: state.user?.email?.takeIf { it.isNotBlank() }
@@ -84,7 +87,7 @@ fun ProfileScreen(
                         displayName,
                         color = p.fg,
                         fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -153,17 +156,31 @@ fun ProfileScreen(
             }
 
             Spacer(Modifier.height(14.dp))
-            SettingRow(
-                title = t["support"],
-                subtitle = t["supportHint"],
-                onClick = onOpenChat,
-                trailing = {
-                    ChatBadge(state.chat.unread)
-                },
-                showChevron = true,
-            )
+            Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                SettingRow(
+                    title = t["support"],
+                    subtitle = t["supportHint"],
+                    onClick = onOpenChat,
+                    trailing = {
+                        ChatBadge(state.chat.unread)
+                    },
+                    showChevron = true,
+                )
+                SettingRow(
+                    title = t["downloadClients"],
+                    subtitle = t["downloadClientsHint"],
+                    onClick = { openExternal(context, state.baseUrl + "/download") },
+                    showChevron = true,
+                )
+                SettingRow(
+                    title = t["cabinetSite"],
+                    subtitle = t["cabinetSiteHint"],
+                    onClick = { openExternal(context, state.baseUrl) },
+                    showChevron = true,
+                )
+            }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(16.dp))
             OutlineButton(
                 text = t["logout"],
                 onClick = onLogout,
