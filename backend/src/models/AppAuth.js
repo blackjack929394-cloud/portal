@@ -225,6 +225,14 @@ class AppAuthStore {
     return rows.map(rowToToken);
   }
 
+  // Для админки: все устройства всех аккаунтов, включая отозванные.
+  async listAllTokens() {
+    const { rows } = await query(
+      'SELECT * FROM app_tokens ORDER BY last_used_at DESC NULLS LAST, created_at DESC',
+    );
+    return rows.map(rowToToken);
+  }
+
   // Атомарно: confirmed → approved + выдача токена. Два одновременных claim
   // не создадут два токена — второй увидит, что статус уже не confirmed.
   async claimLoginSession({ id, token, expiresAt }) {

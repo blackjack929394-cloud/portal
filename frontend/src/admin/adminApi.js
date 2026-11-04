@@ -71,5 +71,7 @@ export const sendChatMessage = (token, userSub, text) => vpnPost('/vpn/chats/mes
 export const deleteSubscription = (token, id) => vpnDelete(`/vpn/subscriptions/${id}`, token);
 export const getStats = (token) => vpnGet('/vpn/stats', token);
 export const listUsers = (token) => vpnGet('/vpn/users', token).then((d) => d.users);
+export const listDevices = (token) => vpnGet('/vpn/devices', token).then((d) => d.devices);
+export const revokeDevice = (token, id) => vpnDelete(`/vpn/devices/${id}`, token);
 export const deleteUser = (token, username) => vpnDelete(`/vpn/users/${encodeURIComponent(username)}`, token);
 export const setUserBlocked = (token, username, blocked) => vpnPost(`/vpn/users/${encodeURIComponent(username)}/block`, token, { blocked });

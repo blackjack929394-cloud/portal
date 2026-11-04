@@ -13,6 +13,7 @@ import {
   setEmployeeBlocked,
 } from '../store/userDirectory.js';
 import { PRESETS, getProfile, saveProfile } from '../services/routingService.js';
+import { listAllAppDevices, revokeAppTokenById } from '../services/appAuthService.js';
 
 // Публичный базовый URL: из конфига (PUBLIC_BASE_URL), иначе из запроса.
 function baseUrlFor(req) {
@@ -452,6 +453,27 @@ export async function getStats(req, res) {
 }
 
 // Список зарегистрированных пользователей (локальные + SSO/employee).
+// ── Мониторинг устройств приложения (админка) ───────────────────────────────
+
+export async function listAppDevicesController(req, res, next) {
+  try {
+    return res.json({ devices: await listAllAppDevices() });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function revokeAppDeviceAdminController(req, res, next) {
+  try {
+    const revoked = await revokeAppTokenById(req.params.id);
+    if (!revoked) return res.status(404).json({ error: 'NOT_FOUND' });
+    audit('admin.app_device_revoked', { tokenId: revoked.id, userSub: revoked.userSub });
+    return res.json({ ok: true });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export async function listUsersController(req, res) {
   const localUsers = (await listUsers()).map((u) => ({ ...u, kind: 'user' }));
   const employees = (await listEmployees()).map((e) => ({

@@ -218,6 +218,29 @@ export async function revokeAppTokenById(id, userSub) {
   return revoked;
 }
 
+// ── Мониторинг устройств для админки ────────────────────────────────────────
+
+export async function listAllAppDevices() {
+  const tokens = await appAuthStore.listAllTokens();
+  const now = Date.now();
+  return tokens.map((token) => ({
+    id: token.id,
+    userSub: token.userSub,
+    userName: token.userName,
+    userEmail: token.userEmail,
+    userKind: token.userKind,
+    deviceName: token.deviceName,
+    platform: token.platform,
+    appVersion: token.appVersion,
+    createdAt: token.createdAt,
+    lastUsedAt: token.lastUsedAt,
+    expiresAt: token.expiresAt,
+    status: token.revokedAt
+      ? 'revoked'
+      : new Date(token.expiresAt).getTime() <= now ? 'expired' : 'active',
+  }));
+}
+
 export async function listAppDevices(userSub) {
   const tokens = await appAuthStore.listTokens(userSub);
   return tokens

@@ -31,6 +31,7 @@ export default function AppLoginModal({ t, onClose }) {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [remaining, setRemaining] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
   const [error, setError] = useState('');
   const alive = useRef(true);
   // Номер запуска: StrictMode монтирует эффект дважды, а «Обновить» может
@@ -146,6 +147,31 @@ export default function AppLoginModal({ t, onClose }) {
     };
   }, [close]);
 
+  function copyCode() {
+    if (!qr?.code) return;
+    const done = () => {
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 1500);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(qr.code).then(done).catch(done);
+      return;
+    }
+    try {
+      const field = document.createElement('textarea');
+      field.value = qr.code;
+      field.style.position = 'fixed';
+      field.style.opacity = '0';
+      document.body.appendChild(field);
+      field.select();
+      document.execCommand('copy');
+      document.body.removeChild(field);
+    } catch {
+      // если браузер запретил копирование, код всё равно виден на экране
+    }
+    done();
+  }
+
   async function onConfirm() {
     if (!qr?.id) return;
     setBusy(true);
@@ -196,7 +222,12 @@ export default function AppLoginModal({ t, onClose }) {
             {qr?.code && (
               <div className="qr-manual">
                 <span className="field-label">{t('appQrManual')}</span>
-                <code className="qr-code">{qr.code}</code>
+                <div className="qr-code-row">
+                  <code className="qr-code">{qr.code}</code>
+                  <button className="btn ghost qr-copy" onClick={copyCode}>
+                    {codeCopied ? t('appQrCopied') : t('appQrCopy')}
+                  </button>
+                </div>
               </div>
             )}
             <div className="qr-meta">

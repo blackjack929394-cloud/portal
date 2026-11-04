@@ -141,9 +141,7 @@ private fun RootContent(
             DogmaTopBar(
                 lang = state.lang,
                 tagline = t["brandTag"],
-                serverLabel = t["serverTitle"],
                 onLang = vm::setLang,
-                onServer = { showServer = true },
                 userInitial = state.user?.let {
                     (it.name ?: it.email)?.firstOrNull { c -> c.isLetterOrDigit() }?.uppercase()
                 },
@@ -188,6 +186,7 @@ private fun RootContent(
                             showRouting = true
                             vm.loadRouting()
                         },
+                        onOpenServer = { showServer = true },
                     )
                 }
             }

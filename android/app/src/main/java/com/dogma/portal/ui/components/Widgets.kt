@@ -117,9 +117,7 @@ fun AppMark(
 fun DogmaTopBar(
     lang: com.dogma.portal.ui.Lang,
     tagline: String,
-    serverLabel: String,
     onLang: (com.dogma.portal.ui.Lang) -> Unit,
-    onServer: () -> Unit,
     modifier: Modifier = Modifier,
     userInitial: String? = null,
     profileLabel: String = "",
@@ -174,17 +172,6 @@ fun DogmaTopBar(
                 .clickable { onLang(com.dogma.portal.ui.Lang.EN) }
                 .padding(horizontal = 3.dp, vertical = 4.dp),
         )
-        Spacer(Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .clickable(onClick = onServer)
-                .semantics { contentDescription = serverLabel },
-            contentAlignment = Alignment.Center,
-        ) {
-            DogmaIcon(DogmaIconKind.GEAR, Modifier.size(18.dp), tint = p.muted)
-        }
         if (userInitial != null && onProfile != null) {
             Spacer(Modifier.width(4.dp))
             Box(

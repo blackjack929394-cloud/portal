@@ -1,6 +1,5 @@
 package com.dogma.portal.ui.qr
 
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +28,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -41,8 +41,9 @@ import com.dogma.portal.ui.components.DogmaTextField
 import com.dogma.portal.ui.components.OutlineButton
 import com.dogma.portal.ui.components.PrimaryButton
 import com.dogma.portal.ui.theme.dogmaPalette
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 
 @Composable
 fun QrLoginScreen(
@@ -52,19 +53,30 @@ fun QrLoginScreen(
     onSubmitCode: (String) -> Unit,
 ) {
     val p = dogmaPalette()
+    val context = LocalContext.current
     var manual by rememberSaveable { mutableStateOf("") }
+    var scanError by rememberSaveable { mutableStateOf<String?>(null) }
 
-    val scanner = rememberLauncherForActivityResult(ScanContract()) { result ->
-        val content = result.contents
-        if (!content.isNullOrBlank()) onSubmitCode(content)
+    val scanner = remember(context) {
+        GmsBarcodeScanning.getClient(
+            context,
+            GmsBarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                .enableAutoZoom()
+                .build(),
+        )
     }
-    val options = remember(t) {
-        ScanOptions().apply {
-            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-            setPrompt(t["qrScannerPrompt"])
-            setBeepEnabled(false)
-            setOrientationLocked(false)
-        }
+
+    fun startScan() {
+        scanError = null
+        scanner.startScan()
+            .addOnSuccessListener { barcode ->
+                val value = barcode.rawValue
+                if (!value.isNullOrBlank()) onSubmitCode(value)
+            }
+            .addOnFailureListener {
+                scanError = t["qrScannerUnavailable"]
+            }
     }
 
     Box(Modifier.fillMaxSize().background(p.bg)) {
@@ -204,7 +216,7 @@ fun QrLoginScreen(
                         Spacer(Modifier.height(24.dp))
                         PrimaryButton(
                             t["qrScanButton"],
-                            onClick = { scanner.launch(options) },
+                            onClick = { startScan() },
                         )
                         Spacer(Modifier.height(8.dp))
                         OutlineButton(t["close"], onClick = onClose)
@@ -231,7 +243,7 @@ fun QrLoginScreen(
                         Spacer(Modifier.height(24.dp))
                         PrimaryButton(
                             t["qrScanButton"],
-                            onClick = { scanner.launch(options) },
+                            onClick = { startScan() },
                             enabled = !qr.busy,
                         )
 
@@ -266,6 +278,15 @@ fun QrLoginScreen(
                             Spacer(Modifier.height(12.dp))
                             Text(
                                 qr.error,
+                                color = p.danger,
+                                fontSize = 12.5.sp,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                        if (scanError != null) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                scanError ?: "",
                                 color = p.danger,
                                 fontSize = 12.5.sp,
                                 textAlign = TextAlign.Center,

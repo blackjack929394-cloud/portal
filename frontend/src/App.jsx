@@ -310,17 +310,6 @@ export default function App() {
             <a className="topbar-link" href="/download">{t('downloadNav')}</a>
           </nav>
           {auth && auth !== false && (
-            <button className="topbar-btn" onClick={() => setQrOpen(true)} title={t('appQrOpen')}>
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                <rect x="3" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.7" />
-                <rect x="14" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.7" />
-                <rect x="3" y="14" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.7" />
-                <path d="M14 14h3v3h-3zM19 14h2v2h-2zM14 19h2v2h-2zM18 18h3v3h-3z" fill="currentColor" />
-              </svg>
-              <span>{t('appQrOpen')}</span>
-            </button>
-          )}
-          {auth && auth !== false && (
             <button className="user-chip" onClick={onLogout} title={t('logout')}>
               <span className="user-name">{auth.name} · </span>{t('logout')}
             </button>
@@ -436,7 +425,6 @@ export default function App() {
             onCopy={onCopy}
             onRevoke={onRevoke}
             onOpenQr={() => setQrOpen(true)}
-            onLogout={onLogout}
             tab={cabinetTab}
             onTab={setCabinetTab}
             devices={devices}
@@ -670,7 +658,7 @@ function formatTraffic(used, limit, t) {
 
 function Cabinet({
   t, auth, sub, format, onFormat, importUrl, qrDataUrl, copied, onCopy,
-  onRevoke, onOpenQr, onLogout, tab, onTab,
+  onRevoke, onOpenQr, tab, onTab,
   devices, devicesLoading, devicesError, onReloadDevices, onRevokeDevice,
   routingProfile, routingPresets, onRoutingSaved, lang,
 }) {
@@ -720,11 +708,6 @@ function Cabinet({
           </span>
         </div>
 
-        <div className="cabinet-side-actions">
-          <a className="btn ghost" href="/download">{t('downloadNav')}</a>
-          <button className="btn primary" onClick={onOpenQr}>{t('appQrOpen')}</button>
-          <button className="btn link cabinet-logout" onClick={onLogout}>{t('logout')}</button>
-        </div>
       </aside>
 
       <div className="cabinet-main">
@@ -773,7 +756,6 @@ function Cabinet({
 
               <div className="cabinet-hero-foot">
                 <button className="btn primary" onClick={() => onTab('subscription')}>{t('cabinetOpenSub')}</button>
-                <button className="btn ghost" onClick={onOpenQr}>{t('appQrOpen')}</button>
               </div>
             </section>
 

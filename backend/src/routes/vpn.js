@@ -46,6 +46,8 @@ adminRouter.post('/subscriptions/:id/revoke', ctrl.revokeSubscription);
 adminRouter.patch('/subscriptions/:id', ctrl.updateSubscriptionController);
 adminRouter.delete('/subscriptions/:id', ctrl.deleteSubscription);
 adminRouter.get('/stats', ctrl.getStats);
+adminRouter.get('/devices', ctrl.listAppDevicesController);
+adminRouter.delete('/devices/:id', ctrl.revokeAppDeviceAdminController);
 adminRouter.get('/users', ctrl.listUsersController);
 adminRouter.get('/users/:username/routing', ctrl.getUserRoutingController);
 adminRouter.post('/users/:username/block', ctrl.setUserBlockedController);

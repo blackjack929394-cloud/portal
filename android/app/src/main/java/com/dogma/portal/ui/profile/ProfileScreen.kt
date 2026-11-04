@@ -172,12 +172,6 @@ fun ProfileScreen(
                     onClick = { openExternal(context, state.baseUrl + "/download") },
                     showChevron = true,
                 )
-                SettingRow(
-                    title = t["cabinetSite"],
-                    subtitle = t["cabinetSiteHint"],
-                    onClick = { openExternal(context, state.baseUrl) },
-                    showChevron = true,
-                )
             }
 
             Spacer(Modifier.height(16.dp))

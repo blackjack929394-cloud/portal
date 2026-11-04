@@ -23,6 +23,8 @@ import {
   deleteUser,
   setUserBlocked,
   getStats,
+  listDevices,
+  revokeDevice,
 } from './adminApi.js';
 import DogmaLogo from '../components/DogmaLogo.jsx';
 
@@ -31,6 +33,7 @@ const TABS = [
   { id: 'nodes', label: 'Ноды' },
   { id: 'subscriptions', label: 'Подписки' },
   { id: 'users', label: 'Пользователи' },
+  { id: 'devices', label: 'Устройства' },
   { id: 'requests', label: 'Заявки' },
   { id: 'chat', label: 'Чат' },
 ];
@@ -254,6 +257,7 @@ export default function AdminApp() {
         {tab === 'nodes' && <NodesTab token={token} notify={notify} />}
         {tab === 'subscriptions' && <SubscriptionsTab token={token} notify={notify} />}
         {tab === 'users' && <UsersTab token={token} notify={notify} />}
+        {tab === 'devices' && <DevicesTab token={token} notify={notify} />}
         {tab === 'requests' && <PendingTab token={token} notify={notify} />}
         {tab === 'chat' && <ChatTab token={token} />}
       </main>
@@ -546,7 +550,7 @@ function UsersTab({ token, notify }) {
   }
   async function onToggleBlock(u) {
     const next = !u.blocked;
-    if (next && !confirm(`Заблокировать ${u.fullName || u.username}? Он не сможет войти, VPN-доступ отключится.`)) return;
+    if (next && !confirm(`Заблокировать ${u.fullName || u.username}? Он не сможет войти, защищённое соединение отключится.`)) return;
     try { await setUserBlocked(token, u.username, next); reload(); notify(next ? 'Заблокирован' : 'Разблокирован'); } catch (e) { notify(e.message, 'err'); }
   }
   async function onRouting(u) {
@@ -604,13 +608,100 @@ function UsersTab({ token, notify }) {
   );
 }
 
+// ── Устройства приложения ───────────────────────────────────────────────────
+function DevicesTab({ token, notify }) {
+  const { data: rows, err, reload } = usePolling(() => listDevices(token), [token], 10000);
+  const [q, setQ] = useState('');
+  const [showAll, setShowAll] = useState(false);
+
+  async function onRevoke(device) {
+    const name = device.deviceName || device.platform || 'устройство';
+    if (!confirm(`Отключить ${name} у ${device.userEmail || device.userName || device.userSub}?`)) return;
+    try {
+      await revokeDevice(token, device.id);
+      reload();
+      notify('Устройство отключено');
+    } catch (e) {
+      notify(e.message, 'err');
+    }
+  }
+
+  if (err && !rows) return <p className="admin-msg err-text">{err}</p>;
+  if (!rows) return <p className="admin-msg">Загрузка…</p>;
+
+  const needle = q.trim().toLowerCase();
+  const visible = rows.filter((d) => (showAll || d.status === 'active')
+    && (!needle || [d.userName, d.userEmail, d.userSub, d.deviceName, d.platform]
+      .some((v) => (v || '').toLowerCase().includes(needle))));
+  const activeCount = rows.filter((d) => d.status === 'active').length;
+  const accounts = new Set(rows.filter((d) => d.status === 'active').map((d) => d.userSub)).size;
+
+  return (
+    <div>
+      <div className="toolbar">
+        <input className="search" placeholder="Поиск по аккаунту или устройству" value={q}
+          onChange={(e) => setQ(e.target.value)} />
+        <label className="dim check-inline">
+          <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
+          Показывать отозванные
+        </label>
+        <span className="dim">{activeCount} активных · {accounts} аккаунтов</span>
+      </div>
+
+      {visible.length === 0 ? <p className="admin-msg">Активных устройств нет.</p> : (
+        <div className="table-wrap">
+          <table className="atable">
+            <thead>
+              <tr>
+                <th>Аккаунт</th>
+                <th>Устройство</th>
+                <th>Платформа</th>
+                <th>Версия</th>
+                <th>Последний вход</th>
+                <th>Добавлено</th>
+                <th>Статус</th>
+                <th>Действие</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((d) => (
+                <tr key={d.id}>
+                  <td className="user-cell">
+                    <div>{d.userName || d.userEmail || '—'}</div>
+                    {d.userEmail && <div className="cell-sub">{d.userEmail}</div>}
+                  </td>
+                  <td>{d.deviceName || '—'}</td>
+                  <td className="dim">{d.platform || '—'}</td>
+                  <td className="mono">{d.appVersion ? `v${d.appVersion}` : '—'}</td>
+                  <td className="dim">{d.lastUsedAt ? fmt(d.lastUsedAt) : '—'}</td>
+                  <td className="dim">{fmtDate(d.createdAt)}</td>
+                  <td>
+                    <span className={`badge ${d.status === 'active' ? 'active' : d.status === 'expired' ? 'pending' : 'fail'}`}>
+                      {d.status === 'active' ? 'активно' : d.status === 'expired' ? 'истекло' : 'отозвано'}
+                    </span>
+                  </td>
+                  <td className="row-actions">
+                    {d.status === 'active'
+                      ? <button className="btn ghost xs danger" onClick={() => onRevoke(d)}>Отключить</button>
+                      : <span className="dim">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RoutingSummary({ p }) {
   return (
     <div className="routing-summary">
       <span className="badge active">{p.mode === 'selective' ? 'Только выбранное' : 'Весь трафик'}</span>
       {p.mode === 'global' && <span className="dim">RU напрямую: {p.ruDirect ? 'да' : 'нет'}</span>}
       {(p.presets || []).length > 0 && <span className="dim">Сервисы: {p.presets.join(', ')}</span>}
-      {(p.proxyDomains || []).length > 0 && <span className="dim">Через VPN: {p.proxyDomains.join(', ')}</span>}
+      {(p.proxyDomains || []).length > 0 && <span className="dim">Через защищённое соединение: {p.proxyDomains.join(', ')}</span>}
       {(p.directDomains || []).length > 0 && <span className="dim">Напрямую: {p.directDomains.join(', ')}</span>}
     </div>
   );

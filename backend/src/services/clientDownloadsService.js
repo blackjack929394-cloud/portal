@@ -12,7 +12,7 @@ const PLATFORMS = [
   {
     id: 'android',
     platform: 'Android',
-    name: 'Dogma для Android',
+    name: 'Dogma Web для Android',
     description: 'Мобильный клиент с подпиской, маршрутизацией и входом по QR.',
     exts: ['.apk'],
     config: config.clients.android,
@@ -20,7 +20,7 @@ const PLATFORMS = [
   {
     id: 'windows',
     platform: 'Windows',
-    name: 'Dogma для Windows',
+    name: 'Dogma Web для Windows',
     description: 'Десктопный клиент для Windows 10/11: тот же профиль и правила.',
     exts: ['.exe', '.msi'],
     config: config.clients.windows,

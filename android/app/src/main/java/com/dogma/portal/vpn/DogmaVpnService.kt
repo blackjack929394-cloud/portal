@@ -158,7 +158,7 @@ class DogmaVpnService : VpnService(), CommandServerHandler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val builder = Builder()
-            .setSession("Dogma VPN")
+            .setSession("Dogma Web")
             .setMtu(if (mtu > 0) mtu else 1500)
             .setConfigureIntent(intent)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -179,7 +179,7 @@ class DogmaVpnService : VpnService(), CommandServerHandler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val notification: Notification = NotificationCompat.Builder(this, DogmaApp.VPN_CHANNEL_ID)
-            .setContentTitle("Dogma VPN")
+            .setContentTitle("Dogma Web")
             .setContentText("Подключение: $nodeName")
             .setSmallIcon(R.drawable.ic_stat_vpn)
             .setContentIntent(open)
@@ -224,11 +224,11 @@ class DogmaVpnService : VpnService(), CommandServerHandler {
         val raw = t.message?.takeIf { it.isNotBlank() } ?: t.javaClass.simpleName
         return when {
             raw.contains("decode config", true) || raw.contains("initialize inbound", true) ->
-                "Ошибка конфигурации VPN. Выберите другой сервер или обновите подписку."
+                "Ошибка конфигурации защищённого соединения. Выберите другой сервер или обновите подписку."
             raw.contains("timeout", true) || raw.contains("i/o", true) || raw.contains("handshake", true) ->
                 "Сервер не отвечает. Проверьте интернет или выберите другой сервер."
             raw.contains("permission", true) ->
-                "Нет разрешения VPN. Разрешите подключение и попробуйте снова."
+                "Нет разрешения на подключение. Разрешите его и попробуйте снова."
             else -> raw
         }
     }
@@ -271,7 +271,7 @@ class DogmaVpnService : VpnService(), CommandServerHandler {
                 manager.createNotificationChannel(
                     NotificationChannel(
                         DogmaApp.VPN_CHANNEL_ID,
-                        "VPN",
+                        "Защищённое соединение",
                         NotificationManager.IMPORTANCE_LOW,
                     ),
                 )

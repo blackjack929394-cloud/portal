@@ -64,20 +64,26 @@ function ClientCard({ client, t }) {
         ))}
       </dl>
 
-      {client.available ? (
-        <a className="btn primary client-download" href={client.downloadUrl}>
-          {t('downloadBtn')}
-        </a>
-      ) : (
-        <span className="btn primary client-download disabled">{t('downloadSoon')}</span>
-      )}
+      <div className="client-footer">
+        {(client.fileName || client.sha256) && (
+          <div className="client-file-info">
+            {client.fileName && <p className="client-file">{client.fileName}</p>}
+            {client.sha256 && (
+              <p className="client-file">
+                SHA-256: <code>{client.sha256}</code>
+              </p>
+            )}
+          </div>
+        )}
 
-      {client.fileName && <p className="client-file">{client.fileName}</p>}
-      {client.sha256 && (
-        <p className="client-file">
-          SHA-256: <code>{client.sha256}</code>
-        </p>
-      )}
+        {client.available ? (
+          <a className="btn primary client-download" href={client.downloadUrl}>
+            {t('downloadBtn')}
+          </a>
+        ) : (
+          <span className="btn primary client-download disabled">{t('downloadSoon')}</span>
+        )}
+      </div>
     </article>
   );
 }
@@ -157,7 +163,6 @@ export default function DownloadsPage() {
               <li key={i}><span className="step-n">{i + 1}</span><span>{step}</span></li>
             ))}
           </ol>
-          <a className="btn ghost download-portal-btn" href="/">{t('cabinetNav')}</a>
         </section>
       </main>
     </div>

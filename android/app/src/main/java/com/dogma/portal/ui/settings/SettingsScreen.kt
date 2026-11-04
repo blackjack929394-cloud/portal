@@ -30,6 +30,7 @@ fun SettingsScreen(
     onKillSwitch: (Boolean) -> Unit,
     onAutostart: (Boolean) -> Unit,
     onOpenRouting: () -> Unit,
+    onOpenServer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = dogmaPalette()
@@ -65,6 +66,12 @@ fun SettingsScreen(
                     title = t["routingTitle"],
                     subtitle = t["routingInAppHint"],
                     onClick = onOpenRouting,
+                    showChevron = true,
+                )
+                SettingRow(
+                    title = t["portalServer"],
+                    subtitle = t["portalServerHint"],
+                    onClick = onOpenServer,
                     showChevron = true,
                 )
             }
