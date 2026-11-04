@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, nativeImage, shell, dialog, ipcMain, session } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, shell, dialog, ipcMain, session, safeStorage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { spawn } = require('node:child_process');
@@ -32,6 +32,43 @@ function writeSettings(patch) {
   const next = { ...readSettings(), ...patch };
   fs.writeFileSync(settingsPath(), JSON.stringify(next, null, 2), 'utf8');
   return next;
+}
+
+function saveToken(token) {
+  if (!token) {
+    writeSettings({ appToken: null, appTokenEnc: null });
+    return;
+  }
+  if (safeStorage.isEncryptionAvailable()) {
+    writeSettings({
+      appTokenEnc: safeStorage.encryptString(token).toString('base64'),
+      appToken: null,
+    });
+  } else {
+    writeSettings({ appToken: token, appTokenEnc: null });
+  }
+}
+
+function getToken() {
+  const settings = readSettings();
+  if (settings.appTokenEnc && safeStorage.isEncryptionAvailable()) {
+    try { return safeStorage.decryptString(Buffer.from(settings.appTokenEnc, 'base64')); } catch { return null; }
+  }
+  return settings.appToken || null;
+}
+
+function authHeaders(extra = {}) {
+  const token = getToken();
+  return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
+}
+
+function sessionFetch(pathname, options = {}) {
+  const ses = mainWindow ? mainWindow.webContents.session : session.defaultSession;
+  return ses.fetch(`${PORTAL_URL}${pathname}`, {
+    credentials: 'include',
+    ...options,
+    headers: authHeaders(options.headers || {}),
+  });
 }
 
 function singBoxPath() {
@@ -113,8 +150,7 @@ async function restoreSystemProxy() {
 }
 
 async function portalJson(pathname) {
-  const ses = mainWindow ? mainWindow.webContents.session : session.defaultSession;
-  const res = await ses.fetch(`${PORTAL_URL}${pathname}`, { credentials: 'include' });
+  const res = await sessionFetch(pathname);
   if (!res.ok) {
     const err = new Error(res.status === 401 ? 'Сначала войдите в личный кабинет' : `HTTP ${res.status}`);
     err.status = res.status;
@@ -131,8 +167,7 @@ async function fetchSmartConfig(force = false) {
   if (!sub || !sub.smartSubscriptionUrl) {
     throw new Error('В подписке нет ссылки с маршрутизацией');
   }
-  const ses = mainWindow ? mainWindow.webContents.session : session.defaultSession;
-  const res = await ses.fetch(sub.smartSubscriptionUrl, { credentials: 'include' });
+  const res = await sessionFetch(sub.smartSubscriptionUrl.replace(PORTAL_URL, ''));
   if (!res.ok) throw new Error(`Не удалось получить конфиг: HTTP ${res.status}`);
   const config = await res.json();
   configCache = { at: Date.now(), config };
@@ -336,8 +371,9 @@ function createWindow() {
   });
 }
 
-function openPortal() {
+function openPortal(pathname = '') {
   if (portalWindow && !portalWindow.isDestroyed()) {
+    if (pathname) portalWindow.loadURL(`${PORTAL_URL}${pathname}`);
     portalWindow.show();
     portalWindow.focus();
     return;
@@ -357,7 +393,7 @@ function openPortal() {
       sandbox: true,
     },
   });
-  portalWindow.loadURL(PORTAL_URL);
+  portalWindow.loadURL(`${PORTAL_URL}${pathname}`);
   portalWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://') || url.startsWith('http://')) shell.openExternal(url);
     return { action: 'deny' };
@@ -383,7 +419,7 @@ async function getState() {
   };
 
   try {
-    const me = await ses.fetch(`${PORTAL_URL}/auth/me`, { credentials: 'include' });
+    const me = await sessionFetch('/auth/me');
     if (me.ok) {
       state.user = await me.json();
       state.loggedIn = true;
@@ -392,7 +428,7 @@ async function getState() {
 
   if (state.loggedIn) {
     try {
-      const sub = await ses.fetch(`${PORTAL_URL}/api/v1/vpn/subscription`, { credentials: 'include' });
+      const sub = await sessionFetch('/api/v1/vpn/subscription');
       if (sub.ok) state.subscription = await sub.json();
       else if (sub.status !== 404) state.subscription = null;
     } catch { /* ignore */ }
@@ -437,6 +473,8 @@ ipcMain.handle('dogma:set-autoconnect', (_event, value) => {
 
 ipcMain.handle('dogma:logout', async () => {
   await disconnect();
+  try { await sessionFetch('/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
+  saveToken(null);
   const ses = mainWindow ? mainWindow.webContents.session : session.defaultSession;
   await ses.clearStorageData({ storages: ['cookies', 'localstorage', 'indexdb', 'cachestorage'] });
   configCache = { at: 0, config: null };
@@ -444,9 +482,84 @@ ipcMain.handle('dogma:logout', async () => {
   return { ok: true };
 });
 
+ipcMain.handle('dogma:login', async (_event, { email, password }) => {
+  const value = String(email || '').trim();
+  const pass = String(password || '');
+  if (!value || !pass) return { ok: false, error: 'Введите email и пароль' };
+  const res = await sessionFetch('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: value, password: pass }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = data.error === 'INVALID_CREDENTIALS' ? 'Неверный email или пароль' : (data.error || `HTTP ${res.status}`);
+    return { ok: false, error: message };
+  }
+  saveToken(null);
+  configCache = { at: 0, config: null };
+  return { ok: true };
+});
+
+ipcMain.handle('dogma:login-key', async (_event, code) => {
+  const value = String(code || '').trim();
+  if (value.length < 8) return { ok: false, error: 'Введите код входа' };
+  const scan = await sessionFetch('/auth/app/qr/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      code: value,
+      deviceName: 'Dogma Web Windows',
+      platform: 'windows',
+      appVersion: app.getVersion(),
+    }),
+  });
+  const scanData = await scan.json().catch(() => ({}));
+  if (!scan.ok) return { ok: false, error: scanData.error || `HTTP ${scan.status}` };
+
+  const claim = await sessionFetch('/auth/app/qr/claim', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: value }),
+  });
+  const data = await claim.json().catch(() => ({}));
+  if (!claim.ok || !data.token) {
+    return { ok: false, error: data.error || 'Не удалось получить токен' };
+  }
+  saveToken(data.token);
+  configCache = { at: 0, config: null };
+  return { ok: true };
+});
+
+ipcMain.handle('dogma:open-google', () => {
+  openPortal('/auth/login');
+  return { ok: true };
+});
+
+ipcMain.handle('dogma:routing', async () => {
+  const res = await sessionFetch('/api/v1/vpn/routing');
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+});
+
+ipcMain.handle('dogma:routing-save', async (_event, profile) => {
+  const res = await sessionFetch('/api/v1/vpn/routing', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(profile || {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, error: data.error || `HTTP ${res.status}` };
+  configCache = { at: 0, config: null };
+  if (singbox) {
+    await disconnect();
+    await connect();
+  }
+  return { ok: true, profile: data.profile };
+});
+
 ipcMain.handle('dogma:chat', async () => {
-  const ses = mainWindow ? mainWindow.webContents.session : session.defaultSession;
-  const res = await ses.fetch(`${PORTAL_URL}/api/v1/chat`, { credentials: 'include' });
+  const res = await sessionFetch('/api/v1/chat');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 });
@@ -454,10 +567,8 @@ ipcMain.handle('dogma:chat', async () => {
 ipcMain.handle('dogma:chat-send', async (_event, text) => {
   const value = String(text || '').trim();
   if (!value) throw new Error('Пустое сообщение');
-  const ses = mainWindow ? mainWindow.webContents.session : session.defaultSession;
-  const res = await ses.fetch(`${PORTAL_URL}/api/v1/chat`, {
+  const res = await sessionFetch('/api/v1/chat', {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: value }),
   });
@@ -482,7 +593,8 @@ if (!gotLock) {
       await restoreSystemProxy().catch(() => {});
     }
     createWindow();
-    createMenu();
+    Menu.setApplicationMenu(null);
+    if (mainWindow) mainWindow.setMenuBarVisibility(false);
     createTray();
     setStatus('Отключено');
 

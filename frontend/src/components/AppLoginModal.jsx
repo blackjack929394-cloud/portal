@@ -248,12 +248,9 @@ export default function AppLoginModal({ t, onClose }) {
             <h3 className="qr-state-title">{t('appQrScannedTitle')}</h3>
             <p className="lead">{t('appQrScannedLead')}</p>
             <p className="qr-device">{device || t('appQrDeviceUnknown')}</p>
-            <p className="note">{t('appQrConfirmHint')}</p>
+            <p className="note">{t('appQrAutoConfirm')}</p>
             {error && <p className="note err-text">{error}</p>}
             <div className="qr-actions">
-              <button className="btn primary" onClick={onConfirm} disabled={busy}>
-                {busy ? t('appQrConfirming') : t('appQrConfirm')}
-              </button>
               <button className="btn ghost" onClick={close}>{t('cancel')}</button>
             </div>
           </div>

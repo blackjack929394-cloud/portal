@@ -130,13 +130,17 @@ export async function scanQrLogin({ code, deviceName, platform, appVersion }) {
   const scanned = await appAuthStore.markScanned(session.id, device);
   if (!scanned) return { error: 'CONFLICT' };
 
+  // Сканирование сразу подтверждает устройство: отдельный клик на сайте
+  // для QR/ключа больше не нужен.
+  const confirmed = await appAuthStore.markConfirmed(session.id);
+
   audit('auth.app_qr_scanned', {
     sessionId: scanned.id,
     userSub: scanned.userSub,
     platform: device.platform,
     deviceName: device.deviceName,
   });
-  return { session: publicSession(scanned) };
+  return { session: publicSession(confirmed || scanned) };
 }
 
 // Приложение опрашивает статус по коду (до получения токена).

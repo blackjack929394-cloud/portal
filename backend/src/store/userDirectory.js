@@ -74,7 +74,11 @@ export async function createUser({ username, email, fullName, password }) {
 
 // Проверяет логин/пароль. Возвращает пользователя, { blocked: true } или null.
 export async function authenticateUser(username, password) {
-  const row = await getUserByUsername(username);
+  let row = await getUserByUsername(username);
+  // Вход по email: Windows-клиент присылает почту вместо логина.
+  if (!row && username.includes('@')) {
+    row = await getUserByEmail(username);
+  }
   if (!row) return null;
   if (!verifyPassword(password, row.pass_hash, row.pass_salt)) return null;
   if (row.blocked) return { blocked: true };
