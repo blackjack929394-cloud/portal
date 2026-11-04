@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dogma Web</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #131210; --side: #171614; --card: #1b1917; --card2: #24211e;
+      --line: rgba(239,233,222,.1); --text: #efe9de; --text2: #aaa398; --muted: #8a847a;
+      --gold: #d8a13c; --ok: #63b184; --err: #d9776e;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: 'Segoe UI', Arial, sans-serif; display: flex; overflow: hidden;
+    }
+    aside {
+      width: 224px; flex: none; background: var(--side); border-right: 1px solid var(--line);
+      padding: 20px 14px; display: flex; flex-direction: column; gap: 18px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 12px; }
+    .brand svg { flex: none; }
+    .brand-name { font-size: 16px; font-weight: 800; letter-spacing: 1.6px; }
+    .brand-tag { display: block; font-size: 10px; color: var(--muted); font-weight: 400; letter-spacing: 0; margin-top: 2px; }
+    nav { display: flex; flex-direction: column; gap: 3px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 11px; width: 100%; height: 38px; padding: 0 11px;
+      border: none; border-radius: 9px; background: none; color: var(--text2);
+      font: 13.5px 'Segoe UI', Arial, sans-serif; text-align: left; cursor: pointer;
+    }
+    .nav-item:hover { background: var(--card); color: var(--text); }
+    .nav-item.on { background: var(--card2); color: var(--text); }
+    .nav-item.on svg { color: var(--gold); }
+    .nav-item svg { width: 17px; height: 17px; flex: none; color: var(--muted); }
+    .side-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+    .side-user { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 11px; min-width: 0; }
+    .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--card2); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex: none; }
+    .side-name { font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .side-mail { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    header { height: 64px; flex: none; display: flex; align-items: center; padding: 0 26px; border-bottom: 1px solid var(--line); -webkit-app-region: drag; }
+    header * { -webkit-app-region: no-drag; }
+    .head-title { font-size: 17px; font-weight: 500; }
+    .head-right { margin-left: auto; display: flex; align-items: center; gap: 9px; }
+    .pill { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--text2); font-size: 12px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+    .content { flex: 1; overflow: auto; padding: 24px 26px 34px; }
+    .tab { display: none; max-width: 760px; margin: 0 auto; flex-direction: column; gap: 16px; }
+    .tab.on { display: flex; }
+    .hero { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 26px; display: flex; flex-direction: column; gap: 18px; }
+    .status-title { font-size: 28px; font-weight: 500; line-height: 1.15; }
+    .status-sub { color: var(--text2); font-size: 13px; margin-top: 6px; }
+    .big-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); box-shadow: 0 0 0 5px rgba(138,132,122,.12); }
+    .connected .big-dot { background: var(--ok); box-shadow: 0 0 0 5px rgba(99,177,132,.14); }
+    .connecting .big-dot { background: var(--gold); box-shadow: 0 0 0 5px rgba(216,161,60,.14); }
+    .error .big-dot { background: var(--err); box-shadow: 0 0 0 5px rgba(217,119,110,.14); }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    button { height: 44px; padding: 0 20px; border-radius: 9px; cursor: pointer; font: 500 14px 'Segoe UI', Arial, sans-serif; transition: background .15s, border-color .15s, color .15s; }
+    button.primary { background: var(--text); color: #14120f; border: 1px solid var(--text); }
+    button.primary:hover { background: #f7f2e9; }
+    button.primary:disabled { opacity: .4; cursor: default; }
+    button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    button.ghost:hover { background: var(--card2); }
+    button.danger { background: transparent; color: var(--err); border: 1px solid rgba(217,119,110,.4); }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .stat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+    .stat dt { color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+    .stat dd { margin: 0; font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+    .card h3 { margin: 0 0 12px; font-size: 15px; font-weight: 500; }
+    .hint { color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .list { display: flex; flex-direction: column; gap: 7px; }
+    .node { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 11px; background: var(--card); cursor: pointer; }
+    .node:hover { background: var(--card2); }
+    .node.on { border-color: rgba(216,161,60,.55); }
+    .node-mark { width: 34px; height: 34px; border-radius: 9px; background: var(--card2); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--gold); font-weight: 600; flex: none; }
+    .node-name { font-size: 13.5px; font-weight: 500; }
+    .node-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+    .node-check { margin-left: auto; color: var(--gold); font-size: 16px; }
+    .setting-row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 11px; background: var(--card); }
+    .setting-copy { flex: 1; }
+    .setting-title { font-size: 13.5px; font-weight: 500; }
+    .setting-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+    .switch { position: relative; width: 42px; height: 24px; flex: none; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; background: var(--card2); border: 1px solid var(--line); border-radius: 999px; cursor: pointer; transition: background .15s; }
+    .slider::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+    .switch input:checked + .slider { background: rgba(216,161,60,.25); border-color: rgba(216,161,60,.5); }
+    .switch input:checked + .slider::before { transform: translateX(18px); background: var(--gold); }
+    .chat { display: flex; flex-direction: column; gap: 10px; height: 420px; }
+    .chat-body { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+    .msg { max-width: 78%; padding: 9px 12px; border-radius: 12px; font-size: 13px; line-height: 1.4; background: var(--card2); align-self: flex-start; }
+    .msg.me { align-self: flex-end; background: var(--text); color: #14120f; }
+    .chat-input { display: flex; gap: 8px; }
+    .chat-input input { flex: 1; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); padding: 0 12px; font: 13px 'Segoe UI', Arial, sans-serif; outline: none; }
+    .chat-input input:focus { border-color: var(--gold); }
+    .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 40px 0; }
+    .hidden { display: none !important; }
+    @media (max-width: 900px) { aside { width: 190px; } .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <aside>
+    <div class="brand">
+      <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+        <rect width="32" height="32" rx="7" fill="#24211e"/>
+        <g transform="translate(7.186 6.344) scale(0.95146)">
+          <path d="M0 5.86207V0.689655H6.48036V19.6079H1.36429V5.86207H0Z" fill="#efe9de"/>
+          <path d="M7.84464 19.6079H8.60451C11.4587 19.6079 13.8154 18.6976 15.7007 16.877C17.5861 15.0564 18.5287 12.8137 18.5287 10.1488C18.5287 7.48386 17.5861 5.24111 15.7138 3.42054C13.8285 1.59994 11.4587 0.689655 8.60451 0.689655H7.84464V5.29387H8.60451C10.0185 5.29387 11.1707 5.75562 12.0741 6.65271C12.9644 7.56301 13.4226 8.72397 13.4226 10.1488C13.4226 11.5472 12.9382 12.7081 11.9955 13.6316C11.0397 14.5551 9.91378 15.0168 8.60451 15.0168H7.84464V19.6079Z" fill="#efe9de"/>
+        </g>
+      </svg>
+      <div><div class="brand-name">DOGMA</div><span class="brand-tag">Dogma Web</span></div>
+    </div>
+    <nav>
+      <button class="nav-item on" data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Подключение</button>
+      <button class="nav-item" data-tab="servers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><circle cx="7" cy="7" r="0.8" fill="currentColor"/><circle cx="7" cy="17" r="0.8" fill="currentColor"/></svg>Серверы</button>
+      <button class="nav-item" data-tab="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 17l5-5 3 3 7-8"/></svg>Статистика</button>
+      <button class="nav-item" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg>Настройки</button>
+      <button class="nav-item" data-tab="chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>Поддержка</button>
+      <button class="nav-item" data-tab="profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.5-4 3-6 7-6s6.5 2 7 6"/></svg>Профиль</button>
+    </nav>
+    <div class="side-bottom">
+      <div class="side-user hidden" id="side-user">
+        <div class="avatar" id="side-avatar">D</div>
+        <div style="min-width:0"><div class="side-name" id="side-name">—</div><div class="side-mail" id="side-mail"></div></div>
+      </div>
+      <div class="hint" id="side-version">Dogma Web 1.0.0</div>
+    </div>
+  </aside>
+
+  <main>
+    <header>
+      <div class="head-title" id="head-title">Подключение</div>
+      <div class="head-right">
+        <span class="pill">Прокси-режим</span>
+        <span class="pill"><span class="dot" id="status-dot"></span><span id="status-text">Отключено</span></span>
+      </div>
+    </header>
+
+    <div class="content">
+      <section class="tab on" id="tab-home">
+        <div class="hero" id="hero">
+          <div class="row">
+            <div>
+              <div class="status-title" id="hero-title">Соединение отключено</div>
+              <div class="status-sub" id="hero-sub">Войдите в аккаунт, чтобы подключиться</div>
+            </div>
+            <span class="big-dot" id="big-dot"></span>
+          </div>
+          <div class="actions">
+            <button class="primary" id="connect">Подключиться</button>
+            <button class="ghost" id="disconnect">Отключиться</button>
+            <button class="ghost" id="open-portal">Личный кабинет</button>
+          </div>
+          <div class="hint" id="error"></div>
+        </div>
+
+        <div class="card hidden" id="server-card">
+          <div class="row"><div><div class="hint">Текущий сервер</div><div class="node-name" id="current-server">—</div></div><button class="ghost" data-go="servers">Сменить</button></div>
+        </div>
+
+        <div class="grid hidden" id="home-stats">
+          <div class="stat"><dt>Подписка</dt><dd id="sub-status">—</dd></div>
+          <div class="stat"><dt>Трафик</dt><dd id="traffic">—</dd></div>
+          <div class="stat"><dt>Действует до</dt><dd id="expires">—</dd></div>
+        </div>
+
+        <div class="card hidden" id="login-card">
+          <h3>Войдите в аккаунт</h3>
+          <p class="hint">Откройте личный кабинет, войдите по паролю или через Google. После входа это окно обновится автоматически.</p>
+          <button class="primary" id="login">Открыть личный кабинет</button>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-servers">
+        <div class="row"><div><div class="status-title" style="font-size:22px">Серверы</div><div class="hint">Выберите выходную ноду. Изменение применится сразу.</div></div><button class="ghost" id="refresh-nodes">Обновить</button></div>
+        <div class="list" id="node-list"><div class="empty">Загрузка…</div></div>
+      </section>
+
+      <section class="tab" id="tab-stats">
+        <div class="status-title" style="font-size:22px">Статистика</div>
+        <div class="grid">
+          <div class="stat"><dt>Трафик</dt><dd id="stats-traffic">—</dd></div>
+          <div class="stat"><dt>Время соединения</dt><dd id="stats-time">—</dd></div>
+          <div class="stat"><dt>Сервер</dt><dd id="stats-node">—</dd></div>
+        </div>
+        <div class="card"><h3>Подписка</h3><div class="hint" id="stats-sub">—</div></div>
+      </section>
+
+      <section class="tab" id="tab-settings">
+        <div class="status-title" style="font-size:22px">Настройки</div>
+        <div class="setting-row"><div class="setting-copy"><div class="setting-title">Запускать при входе в Windows</div><div class="setting-sub">Приложение будет открываться в трее</div></div><label class="switch"><input type="checkbox" id="auto-start"><span class="slider"></span></label></div>
+        <div class="setting-row"><div class="setting-copy"><div class="setting-title">Автоподключение</div><div class="setting-sub">Подключаться после запуска, если есть активная подписка</div></div><label class="switch"><input type="checkbox" id="auto-connect"><span class="slider"></span></label></div>
+        <div class="card"><h3>Маршрутизация и устройства</h3><p class="hint">Правила маршрутизации, устройства и QR-вход находятся в личном кабинете.</p><button class="ghost" id="settings-portal">Открыть личный кабинет</button></div>
+      </section>
+
+      <section class="tab" id="tab-chat">
+        <div class="row"><div><div class="status-title" style="font-size:22px">Поддержка</div><div class="hint">Чат с администратором</div></div><button class="ghost" id="chat-refresh">Обновить</button></div>
+        <div class="chat"><div class="chat-body" id="chat-body"><div class="empty">Сообщений пока нет</div></div><div class="chat-input"><input id="chat-text" placeholder="Сообщение" /><button class="primary" id="chat-send">Отправить</button></div></div>
+      </section>
+
+      <section class="tab" id="tab-profile">
+        <div class="status-title" style="font-size:22px">Профиль</div>
+        <div class="card" id="profile-card"><h3 id="profile-name">—</h3><div class="hint" id="profile-mail"></div><div class="hint" id="profile-sub" style="margin-top:8px">—</div></div>
+        <div class="actions"><button class="ghost" id="profile-portal">Личный кабинет</button><button class="danger" id="logout">Выйти из аккаунта</button></div>
+        <div class="hint">Dogma Web 1.0.0 · © 2026 Dogma</div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let state = null;
+    let activeTab = 'home';
+    let chatTimer = null;
+    let clockTimer = null;
+
+    const TAB_TITLES = { home: 'Подключение', servers: 'Серверы', stats: 'Статистика', settings: 'Настройки', chat: 'Поддержка', profile: 'Профиль' };
+
+    function fmtDate(value) {
+      if (!value) return '—';
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+    function fmtClock(ms) {
+      if (!ms || ms < 0) return '—';
+      const s = Math.floor(ms / 1000);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = s % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    }
+    function trafficText(sub) {
+      return sub && sub.trafficLimitGb ? `${Number(sub.trafficUsedGb || 0).toFixed(1)} / ${sub.trafficLimitGb} ГБ` : '—';
+    }
+    function nodeName(tag) {
+      if (!tag || tag === 'auto') return 'Автоматически';
+      return tag;
+    }
+
+    function switchTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+      document.querySelectorAll('.tab').forEach((s) => s.classList.toggle('on', s.id === `tab-${tab}`));
+      $('head-title').textContent = TAB_TITLES[tab] || 'Dogma Web';
+      if (tab === 'chat') { loadChat(); clearInterval(chatTimer); chatTimer = setInterval(loadChat, 5000); }
+      else { clearInterval(chatTimer); chatTimer = null; }
+    }
+
+    function render(next) {
+      state = next;
+      const connected = !!next.connected;
+      const status = next.status || (connected ? 'Подключено' : 'Отключено');
+      const isError = /ошиб/i.test(status);
+
+      $('status-text').textContent = status;
+      $('status-dot').style.background = connected ? '#63b184' : (isError ? '#d9776e' : '#8a847a');
+      $('hero-title').textContent = connected ? 'Соединение защищено' : (isError ? 'Ошибка подключения' : 'Соединение отключено');
+      $('hero-sub').textContent = connected ? 'Трафик идёт через Dogma Web' : (next.loggedIn ? 'Нажмите «Подключиться», чтобы включить защиту' : 'Войдите в аккаунт, чтобы подключиться');
+      $('hero').className = 'hero ' + (connected ? 'connected' : isError ? 'error' : '');
+      $('error').textContent = isError ? status : '';
+      $('connect').disabled = connected || !next.loggedIn;
+      $('disconnect').disabled = !connected;
+
+      $('login-card').classList.toggle('hidden', !!next.loggedIn);
+      $('home-stats').classList.toggle('hidden', !next.loggedIn);
+      $('server-card').classList.toggle('hidden', !next.loggedIn);
+      $('profile-card').classList.toggle('hidden', !next.loggedIn);
+      $('side-user').classList.toggle('hidden', !next.loggedIn);
+
+      const name = next.user?.name || next.user?.email || 'Аккаунт';
+      $('side-name').textContent = name;
+      $('side-mail').textContent = next.user?.email || '';
+      $('side-avatar').textContent = name.trim().charAt(0).toUpperCase();
+      $('profile-name').textContent = name;
+      $('profile-mail').textContent = next.user?.email || '';
+
+      const sub = next.subscription;
+      $('sub-status').textContent = sub ? (sub.status === 'active' ? 'активна' : sub.status || '—') : '—';
+      $('traffic').textContent = trafficText(sub);
+      $('expires').textContent = sub ? fmtDate(sub.expiresAt) : '—';
+      $('stats-traffic').textContent = trafficText(sub);
+      $('stats-node').textContent = nodeName(next.selectedNode);
+      $('current-server').textContent = nodeName(next.selectedNode);
+      $('profile-sub').textContent = sub ? `Подписка: ${sub.status === 'active' ? 'активна' : sub.status || '—'} · ${trafficText(sub)}` : 'Подписка не найдена';
+      $('stats-sub').textContent = sub ? `Статус: ${sub.status} · трафик ${trafficText(sub)} · до ${fmtDate(sub.expiresAt)}` : 'Нет активной подписки';
+      $('auto-start').checked = !!next.autoStart;
+      $('auto-connect').checked = !!next.autoConnect;
+
+      renderNodes(next.nodes || [], next.selectedNode);
+      updateClock();
+    }
+
+    function renderNodes(nodes, selected) {
+      const list = $('node-list');
+      if (!nodes.length) { list.innerHTML = '<div class="empty">Нет доступных серверов. Проверьте подписку.</div>'; return; }
+      list.innerHTML = '';
+      for (const node of nodes) {
+        const el = document.createElement('div');
+        el.className = 'node' + (node.tag === selected ? ' on' : '');
+        el.innerHTML = `<div class="node-mark">${(node.tag || '?').slice(0, 2).toUpperCase()}</div><div><div class="node-name">${node.tag}</div><div class="node-meta">${node.type}${node.server ? ' · ' + node.server : ''}${node.port ? ':' + node.port : ''}</div></div><div class="node-check">${node.tag === selected ? '✓' : ''}</div>`;
+        el.addEventListener('click', async () => {
+          await window.dogmaDesktop.selectNode(node.tag);
+          refresh(true);
+        });
+        list.appendChild(el);
+      }
+    }
+
+    function updateClock() {
+      if (!state) return;
+      $('stats-time').textContent = state.connected && state.connectedSince ? fmtClock(Date.now() - state.connectedSince) : '—';
+    }
+
+    async function refresh(force = false) {
+      try { render(await window.dogmaDesktop.getState()); } catch { /* ignore */ }
+    }
+
+    async function loadChat() {
+      if (!state?.loggedIn) return;
+      try {
+        const data = await window.dogmaDesktop.getChat();
+        const body = $('chat-body');
+        const messages = data.messages || [];
+        if (!messages.length) { body.innerHTML = '<div class="empty">Сообщений пока нет</div>'; return; }
+        body.innerHTML = '';
+        for (const m of messages) {
+          const el = document.createElement('div');
+          el.className = 'msg' + (m.sender === 'user' ? ' me' : '');
+          el.textContent = m.text;
+          body.appendChild(el);
+        }
+        body.scrollTop = body.scrollHeight;
+      } catch { /* ignore */ }
+    }
+
+    document.querySelectorAll('.nav-item').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+    document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.go)));
+
+    $('connect').addEventListener('click', async () => {
+      $('connect').disabled = true;
+      const res = await window.dogmaDesktop.connect();
+      if (res && res.ok === false) $('error').textContent = res.error || 'Не удалось подключиться';
+      await refresh();
+    });
+    $('disconnect').addEventListener('click', async () => { await window.dogmaDesktop.disconnect(); await refresh(); });
+    $('open-portal').addEventListener('click', () => window.dogmaDesktop.openPortal());
+    $('login').addEventListener('click', () => window.dogmaDesktop.openPortal());
+    $('settings-portal').addEventListener('click', () => window.dogmaDesktop.openPortal());
+    $('profile-portal').addEventListener('click', () => window.dogmaDesktop.openPortal());
+    $('refresh-nodes').addEventListener('click', () => refresh(true));
+    $('chat-refresh').addEventListener('click', loadChat);
+    $('chat-send').addEventListener('click', async () => {
+      const text = $('chat-text').value.trim();
+      if (!text) return;
+      $('chat-text').value = '';
+      try { await window.dogmaDesktop.sendChat(text); await loadChat(); } catch { /* ignore */ }
+    });
+    $('chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('chat-send').click(); });
+    $('auto-start').addEventListener('change', (e) => window.dogmaDesktop.setAutoStart(e.target.checked));
+    $('auto-connect').addEventListener('change', (e) => window.dogmaDesktop.setAutoConnect(e.target.checked));
+    $('logout').addEventListener('click', async () => {
+      if (!confirm('Выйти из аккаунта?')) return;
+      await window.dogmaDesktop.logout();
+      await refresh();
+    });
+
+    window.dogmaDesktop.onStatus(() => refresh());
+    refresh();
+    setInterval(refresh, 4000);
+    clockTimer = setInterval(updateClock, 1000);
+  </script>
+</body>
+</html>

@@ -9,15 +9,30 @@ const PROXY_PORT = 2080;
 const IS_WIN = process.platform === 'win32';
 
 let mainWindow = null;
+let portalWindow = null;
 let tray = null;
 let singbox = null;
 let connecting = false;
 let trayStatus = 'Отключено';
+const UI_FILE = path.join(__dirname, 'ui', 'index.html');
 
 const userData = () => app.getPath('userData');
 const configPath = () => path.join(userData(), 'sing-box.json');
 const logPath = () => path.join(userData(), 'sing-box.log');
 const proxyBackupPath = () => path.join(userData(), 'proxy-backup.json');
+const settingsPath = () => path.join(userData(), 'settings.json');
+let configCache = { at: 0, config: null };
+let connectedSince = 0;
+
+function readSettings() {
+  try { return JSON.parse(fs.readFileSync(settingsPath(), 'utf8')); } catch { return {}; }
+}
+
+function writeSettings(patch) {
+  const next = { ...readSettings(), ...patch };
+  fs.writeFileSync(settingsPath(), JSON.stringify(next, null, 2), 'utf8');
+  return next;
+}
 
 function singBoxPath() {
   if (app.isPackaged) {
@@ -108,7 +123,10 @@ async function portalJson(pathname) {
   return res.json();
 }
 
-async function buildConfig() {
+async function fetchSmartConfig(force = false) {
+  if (!force && configCache.config && Date.now() - configCache.at < 30000) {
+    return configCache.config;
+  }
   const sub = await portalJson('/api/v1/vpn/subscription');
   if (!sub || !sub.smartSubscriptionUrl) {
     throw new Error('В подписке нет ссылки с маршрутизацией');
@@ -117,12 +135,46 @@ async function buildConfig() {
   const res = await ses.fetch(sub.smartSubscriptionUrl, { credentials: 'include' });
   if (!res.ok) throw new Error(`Не удалось получить конфиг: HTTP ${res.status}`);
   const config = await res.json();
+  configCache = { at: Date.now(), config };
+  return config;
+}
+
+function nodesFromConfig(config) {
+  const skip = new Set(['selector', 'urltest', 'direct', 'block', 'dns', 'tor']);
+  const nodes = (config.outbounds || [])
+    .filter((o) => !skip.has(o.type))
+    .map((o) => ({ tag: o.tag, type: o.type, server: o.server || '', port: o.server_port || null }));
+  if ((config.outbounds || []).some((o) => o.type === 'urltest')) {
+    nodes.unshift({ tag: 'auto', type: 'auto', server: 'Автоматически', port: null });
+  }
+  return nodes;
+}
+
+async function buildConfig() {
+  const raw = await fetchSmartConfig();
+  const config = structuredClone(raw);
+  const settings = readSettings();
+  const selector = (config.outbounds || []).find((o) => o.type === 'selector' && o.tag === 'proxy');
+  if (selector && settings.selectedNode && selector.outbounds?.includes(settings.selectedNode)) {
+    selector.default = settings.selectedNode;
+  }
 
   // В Windows-приложении используем локальный mixed-прокси и системный прокси,
   // чтобы не требовать прав администратора для TUN/wintun.
   config.inbounds = (config.inbounds || []).filter((inbound) => inbound.type !== 'tun');
   if (!config.inbounds.some((inbound) => inbound.type === 'mixed')) {
     config.inbounds.push({ type: 'mixed', tag: 'mixed-in', listen: PROXY_HOST, listen_port: PROXY_PORT });
+  }
+  // Портал отдаёт pin_sha256 от старого ядра. sing-box 1.14 не принимает
+  // этот пин в формате Hysteria2, поэтому для Windows-клиента используем
+  // TLS без проверки цепочки (сервер аутентифицируется паролем Hysteria2).
+  for (const outbound of config.outbounds || []) {
+    const tls = outbound.tls;
+    if (tls) {
+      delete tls.pin_sha256;
+      delete tls.certificate_public_key_sha256;
+      tls.insecure = true;
+    }
   }
   config.log = { level: 'warn' };
   return config;
@@ -156,6 +208,8 @@ async function connect() {
       throw new Error('Ядро завершилось сразу после запуска. Проверьте журнал.');
     }
     await enableSystemProxy();
+    connectedSince = Date.now();
+    configCache = { at: 0, config: null };
     setStatus('Подключено');
     return { ok: true };
   } catch (err) {
@@ -177,6 +231,7 @@ async function disconnect() {
     singbox = null;
   }
   await restoreSystemProxy().catch(() => {});
+  connectedSince = 0;
   setStatus('Отключено');
   return { ok: true };
 }
@@ -217,14 +272,13 @@ function createMenu() {
         { label: 'Подключиться', accelerator: 'CmdOrCtrl+Shift+C', click: () => connect() },
         { label: 'Отключиться', accelerator: 'CmdOrCtrl+Shift+D', click: () => disconnect() },
         { type: 'separator' },
-        { label: 'Состояние: обновляется', enabled: false, id: 'status' },
+        { label: 'Показать окно', click: () => mainWindow?.show() },
       ],
     },
     {
       label: 'Аккаунт',
       submenu: [
-        { label: 'Личный кабинет', click: () => mainWindow?.loadURL(PORTAL_URL) },
-        { label: 'Скачать Android-клиент', click: () => shell.openExternal(`${PORTAL_URL}/download`) },
+        { label: 'Личный кабинет', click: openPortal },
       ],
     },
     {
@@ -248,7 +302,8 @@ function createTray() {
     { label: 'Подключиться', click: () => connect() },
     { label: 'Отключиться', click: () => disconnect() },
     { type: 'separator' },
-    { label: 'Открыть личный кабинет', click: () => mainWindow?.show() },
+    { label: 'Открыть Dogma Web', click: () => mainWindow?.show() },
+    { label: 'Личный кабинет', click: openPortal },
     { label: 'Выход', click: () => app.quit() },
   ]));
   tray.on('click', () => mainWindow?.show());
@@ -256,10 +311,10 @@ function createTray() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 860,
-    minWidth: 980,
-    minHeight: 640,
+    width: 900,
+    height: 700,
+    minWidth: 760,
+    minHeight: 600,
     backgroundColor: '#131210',
     title: 'Dogma Web',
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
@@ -271,18 +326,7 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadURL(PORTAL_URL);
-
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://') || url.startsWith('http://')) shell.openExternal(url);
-    return { action: 'deny' };
-  });
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith(PORTAL_URL) && !url.startsWith('https://')) {
-      event.preventDefault();
-      shell.openExternal(url);
-    }
-  });
+  mainWindow.loadFile(UI_FILE);
 
   mainWindow.on('close', (event) => {
     if (!app.isQuitting) {
@@ -292,9 +336,134 @@ function createWindow() {
   });
 }
 
+function openPortal() {
+  if (portalWindow && !portalWindow.isDestroyed()) {
+    portalWindow.show();
+    portalWindow.focus();
+    return;
+  }
+
+  portalWindow = new BrowserWindow({
+    width: 1280,
+    height: 860,
+    minWidth: 980,
+    minHeight: 640,
+    backgroundColor: '#131210',
+    title: 'Dogma Web — личный кабинет',
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  portalWindow.loadURL(PORTAL_URL);
+  portalWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://') || url.startsWith('http://')) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  portalWindow.on('closed', () => { portalWindow = null; });
+}
+
+async function getState() {
+  const ses = mainWindow ? mainWindow.webContents.session : session.defaultSession;
+  const settings = readSettings();
+  const state = {
+    loggedIn: false,
+    user: null,
+    subscription: null,
+    nodes: [],
+    selectedNode: settings.selectedNode || 'auto',
+    autoStart: !!app.getLoginItemSettings().openAtLogin,
+    autoConnect: !!settings.autoConnect,
+    connected: !!singbox,
+    connectedSince,
+    status: trayStatus,
+    baseUrl: PORTAL_URL,
+  };
+
+  try {
+    const me = await ses.fetch(`${PORTAL_URL}/auth/me`, { credentials: 'include' });
+    if (me.ok) {
+      state.user = await me.json();
+      state.loggedIn = true;
+    }
+  } catch { /* offline */ }
+
+  if (state.loggedIn) {
+    try {
+      const sub = await ses.fetch(`${PORTAL_URL}/api/v1/vpn/subscription`, { credentials: 'include' });
+      if (sub.ok) state.subscription = await sub.json();
+      else if (sub.status !== 404) state.subscription = null;
+    } catch { /* ignore */ }
+    try {
+      const config = await fetchSmartConfig();
+      state.nodes = nodesFromConfig(config);
+    } catch { /* ignore */ }
+  }
+
+  return state;
+}
+
 ipcMain.handle('dogma:connect', () => connect());
 ipcMain.handle('dogma:disconnect', () => disconnect());
 ipcMain.handle('dogma:status', () => ({ connected: !!singbox, status: trayStatus }));
+ipcMain.handle('dogma:state', () => getState());
+ipcMain.handle('dogma:open-portal', () => { openPortal(); return { ok: true }; });
+ipcMain.handle('dogma:open-download', () => {
+  shell.openExternal(`${PORTAL_URL}/download`);
+  return { ok: true };
+});
+
+ipcMain.handle('dogma:select-node', async (_event, tag) => {
+  writeSettings({ selectedNode: String(tag || 'auto') });
+  configCache = { at: 0, config: null };
+  if (singbox) {
+    await disconnect();
+    return connect();
+  }
+  return { ok: true };
+});
+
+ipcMain.handle('dogma:set-autostart', (_event, value) => {
+  app.setLoginItemSettings({ openAtLogin: !!value, path: process.execPath });
+  return { ok: true, autoStart: !!value };
+});
+
+ipcMain.handle('dogma:set-autoconnect', (_event, value) => {
+  writeSettings({ autoConnect: !!value });
+  return { ok: true, autoConnect: !!value };
+});
+
+ipcMain.handle('dogma:logout', async () => {
+  await disconnect();
+  const ses = mainWindow ? mainWindow.webContents.session : session.defaultSession;
+  await ses.clearStorageData({ storages: ['cookies', 'localstorage', 'indexdb', 'cachestorage'] });
+  configCache = { at: 0, config: null };
+  if (portalWindow && !portalWindow.isDestroyed()) portalWindow.close();
+  return { ok: true };
+});
+
+ipcMain.handle('dogma:chat', async () => {
+  const ses = mainWindow ? mainWindow.webContents.session : session.defaultSession;
+  const res = await ses.fetch(`${PORTAL_URL}/api/v1/chat`, { credentials: 'include' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+});
+
+ipcMain.handle('dogma:chat-send', async (_event, text) => {
+  const value = String(text || '').trim();
+  if (!value) throw new Error('Пустое сообщение');
+  const ses = mainWindow ? mainWindow.webContents.session : session.defaultSession;
+  const res = await ses.fetch(`${PORTAL_URL}/api/v1/chat`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: value }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+});
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -316,6 +485,13 @@ if (!gotLock) {
     createMenu();
     createTray();
     setStatus('Отключено');
+
+    setTimeout(async () => {
+      try {
+        const s = await getState();
+        if (s.autoConnect && s.loggedIn && !singbox) await connect();
+      } catch { /* ignore */ }
+    }, 3500);
   });
 
   app.on('activate', () => {
