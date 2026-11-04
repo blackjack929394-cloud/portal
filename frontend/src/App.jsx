@@ -883,32 +883,39 @@ function Cabinet({
               </div>
             </section>
 
-            <div className="cabinet-side-col">
-              <section className="cabinet-card">
-                <span className="cabinet-kicker">{t('appCardKicker')}</span>
-                <h2 className="cabinet-card-title">{t('appCardTitle')}</h2>
-                <p className="cabinet-card-lead">{t('appCardLead')}</p>
-                <div className="cabinet-card-actions">
-                  <a className="btn ghost" href="/download">{t('downloadNav')}</a>
-                  <button className="btn primary" onClick={onOpenQr}>{t('appQrOpen')}</button>
-                </div>
-              </section>
+            <section className="cabinet-card cabinet-app">
+              <span className="cabinet-kicker">{t('appCardKicker')}</span>
+              <h2 className="cabinet-card-title">{t('appCardTitle')}</h2>
+              <p className="cabinet-card-lead">{t('appCardLead')}</p>
+              <div className="cabinet-card-actions">
+                <a className="btn ghost" href="/download">{t('downloadNav')}</a>
+                <button className="btn primary" onClick={onOpenQr}>{t('appQrOpen')}</button>
+              </div>
+            </section>
 
-              <section className="cabinet-card">
-                <span className="cabinet-kicker">{t('routingTitle')}</span>
-                <h2 className="cabinet-card-title">
-                  {routingProfile?.mode === 'selective' ? t('routingModeSelective') : t('routingModeGlobal')}
-                </h2>
-                <p className="cabinet-card-lead">
-                  {routingProfile?.mode === 'selective'
-                    ? (presetLabels.length ? presetLabels.slice(0, 4).join(' · ') : t('cabinetRoutingNone'))
-                    : t('routingModeGlobalHint')}
-                </p>
-                <div className="cabinet-card-actions">
-                  <button className="btn ghost" onClick={() => onTab('routing')}>{t('cabinetEdit')}</button>
-                </div>
-              </section>
-            </div>
+            <section className="cabinet-card cabinet-routing">
+              <span className="cabinet-kicker">{t('routingTitle')}</span>
+              <h2 className="cabinet-card-title">
+                {routingProfile?.mode === 'selective' ? t('routingModeSelective') : t('routingModeGlobal')}
+              </h2>
+              <p className="cabinet-card-lead">
+                {routingProfile?.mode === 'selective'
+                  ? (presetLabels.length ? presetLabels.slice(0, 4).join(' · ') : t('cabinetRoutingNone'))
+                  : t('routingModeGlobalHint')}
+              </p>
+              <div className="cabinet-card-actions">
+                <button className="btn ghost" onClick={() => onTab('routing')}>{t('cabinetEdit')}</button>
+              </div>
+            </section>
+
+            <section className="cabinet-card cabinet-devices">
+              <span className="cabinet-kicker">{t('cabinetDevices')}</span>
+              <div className="cabinet-device-count">{devices.length}</div>
+              <p className="cabinet-card-lead">{t('cabinetDevicesActive')}</p>
+              <div className="cabinet-card-actions">
+                <button className="btn ghost" onClick={() => onTab('devices')}>{t('cabinetOpen')}</button>
+              </div>
+            </section>
 
             <section className="cabinet-card cabinet-wide">
               <details className="instructions cabinet-instructions">
