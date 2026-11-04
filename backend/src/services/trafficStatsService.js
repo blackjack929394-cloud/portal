@@ -2,6 +2,7 @@ import config from '../config/index.js';
 import logger from '../utils/logger.js';
 import { vpnNodeStore } from '../models/VpnNode.js';
 import { vpnSubscriptionStore } from '../models/VpnSubscription.js';
+import { withLock } from './lockService.js';
 
 const BYTES_IN_GB = 1024 ** 3;
 
@@ -78,7 +79,7 @@ export function startTrafficStatsPoller(intervalMs = 30000) {
   if (intervalMs <= 0) return;
   const tick = async () => {
     try {
-      await updateSubscriptionsTraffic();
+      await withLock('dogma:lock:traffic-stats', Math.max(30, Math.ceil(intervalMs / 1000) * 2), updateSubscriptionsTraffic);
     } catch (err) {
       logger.error({ err }, 'Traffic stats poller error');
     }

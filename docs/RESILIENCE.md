@@ -26,6 +26,24 @@
 - `dogma_pg_pool_total/idle/waiting`;
 - `dogma_process_uptime_seconds`, `dogma_process_memory_rss_bytes`.
 
+## Redis и фоновые задачи
+
+- При старте Redis недоступен — приложение не падает, клиент переподключается
+  с backoff. Сессии временно обслуживаются в памяти процесса (readiness = 0).
+- Фоновые задачи (health-check, traffic stats, maintenance) берут
+  распределённую блокировку в Redis (`SET NX`), поэтому при нескольких
+  инстансах задача выполняется один раз.
+- Собранные подписки кэшируются в Redis на `SUBSCRIPTION_CACHE_TTL_SECONDS`
+  секунд. При недоступном Redis кэш просто отключается.
+
+## Секреты at-rest
+
+Если задан `SECRETS_ENCRYPTION_KEY`, поля узлов `ssh_key`, `ssh_key_base64`,
+`wg_private_key`, `traffic_stats_secret` и пароль Hysteria2 шифруются
+AES-256-GCM перед записью в PostgreSQL (`utils/secretBox.js`). Старые
+незашифрованные значения читаются как есть и шифруются при следующем
+обновлении записи.
+
 ## Readiness и liveness
 
 - `GET /health` — liveness, процесс жив.

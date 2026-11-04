@@ -87,6 +87,9 @@ const config = {
     // удалять запись совсем, и как часто запускать задачу (мс).
     expiredRetentionDays: intFromEnv('VPN_EXPIRED_RETENTION_DAYS', 30, { min: 0 }),
     maintenanceIntervalMs: intFromEnv('VPN_MAINTENANCE_INTERVAL_MS', 60 * 60 * 1000, { min: 60000 }),
+    // Кэш собранных подписок в Redis: снижает нагрузку на БД при частом
+    // обновлении профиля клиентами. 0 — выключить кэш.
+    subscriptionCacheTtlSeconds: intFromEnv('SUBSCRIPTION_CACHE_TTL_SECONDS', 15, { min: 0 }),
   },
   // Health-check нод: период, таймаут одной пробы и порог падений
   // для автоматического исключения ноды из подписки.

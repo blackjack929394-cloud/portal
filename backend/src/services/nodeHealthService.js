@@ -3,6 +3,7 @@ import { performance } from 'node:perf_hooks';
 import config from '../config/index.js';
 import logger from '../utils/logger.js';
 import { vpnNodeStore } from '../models/VpnNode.js';
+import { withLock } from './lockService.js';
 
 // Проверка доступности нод.
 //
@@ -150,7 +151,8 @@ export function startNodeHealthMonitor() {
     if (running) return;
     running = true;
     try {
-      await checkAllNodes();
+      const ttl = Math.max(30, Math.ceil(config.nodeHealth.intervalMs / 1000) * 2);
+      await withLock('dogma:lock:node-health', ttl, checkAllNodes);
     } catch (err) {
       logger.error({ err }, 'node health monitor error');
     } finally {

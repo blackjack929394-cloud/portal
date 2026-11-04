@@ -10,6 +10,7 @@ import { generateVlessClientOutbound, generateVlessRealityUri, tokenToUuid } fro
 import { generateWireguardClientOutbound, buildWireguardConf } from './wireguardConfig.js';
 import { getProfile, buildSingboxConfig, buildHappConfig, buildPac } from './routingService.js';
 import { encryptSubscription } from './subscriptionCrypto.js';
+import redis, { isRedisReady } from '../db/redis.js';
 
 // ── Public API: ноды ─────────────────────────────────────────────────────────
 
@@ -453,7 +454,30 @@ async function hysteriaOutboundsForToken(token) {
 // Полный sing-box профиль с маршрутизацией пользователя и DNS через туннель.
 // «Умная подписка»: Hiddify/sing-box импортируют её по URL, изменения
 // настроек в портале подтягиваются при обновлении подписки в клиенте.
+async function cacheGet(key) {
+  if (!config.vpn.subscriptionCacheTtlSeconds || !isRedisReady()) return null;
+  try {
+    const raw = await redis.get(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function cacheSet(key, value) {
+  if (!config.vpn.subscriptionCacheTtlSeconds || !isRedisReady()) return;
+  try {
+    await redis.set(key, JSON.stringify(value), { EX: config.vpn.subscriptionCacheTtlSeconds });
+  } catch {
+    // кэш не критичен для ответа
+  }
+}
+
 export async function buildSubscriptionSingbox(token) {
+  const cacheKey = `dogma:sub:singbox:${token}`;
+  const cached = await cacheGet(cacheKey);
+  if (cached) return cached;
+
   const sub = await getSubscriptionByToken(token);
   if (sub?.error) return sub;
   if (!sub) return { error: 'NOT_FOUND' };
@@ -462,7 +486,9 @@ export async function buildSubscriptionSingbox(token) {
   if (outbounds.length === 0) return { error: 'NO_NODES_AVAILABLE' };
 
   const profile = await getProfile(sub.userSub);
-  return { config: buildSingboxConfig({ profile, outbounds, serverHosts }), sub };
+  const result = { config: buildSingboxConfig({ profile, outbounds, serverHosts }), sub };
+  await cacheSet(cacheKey, result);
+  return result;
 }
 
 // Полный sing-box конфиг в формате, совместимом со старыми ядрами (Happ).

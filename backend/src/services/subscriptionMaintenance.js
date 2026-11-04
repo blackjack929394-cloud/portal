@@ -2,6 +2,7 @@ import config from '../config/index.js';
 import logger from '../utils/logger.js';
 import { audit } from './auditService.js';
 import { vpnSubscriptionStore } from '../models/VpnSubscription.js';
+import { withLock } from './lockService.js';
 
 // Фоновое обслуживание подписок:
 //   1) помечаем истёкшие по сроку подписки статусом `expired`;
@@ -50,9 +51,10 @@ export async function runSubscriptionMaintenance({ reason = 'schedule' } = {}) {
 
 export function startSubscriptionMaintenance(intervalMs = config.vpn.maintenanceIntervalMs) {
   const run = (reason) => {
-    runSubscriptionMaintenance({ reason }).catch((err) => {
-      logger.error({ err }, 'subscription maintenance crashed');
-    });
+    withLock('dogma:lock:subscription-maintenance', 300, () => runSubscriptionMaintenance({ reason }))
+      .catch((err) => {
+        logger.error({ err }, 'subscription maintenance crashed');
+      });
   };
 
   const firstRun = setTimeout(() => run('startup'), FIRST_RUN_DELAY_MS);

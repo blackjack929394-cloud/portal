@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { query } from '../db/postgres.js';
+import { seal, open } from '../utils/secretBox.js';
 
 // Хранилище VPN-нод (выходных точек).
 // Каждая нода — это VM с развёрнутым VPN-стеком (sing-box, xray, hysteria2, wg и т.д.).
@@ -22,19 +23,24 @@ function rowToNode(row) {
     deploymentError: row.deployment_error,
     wgTunnelIp: row.wg_tunnel_ip,
     wgPublicKey: row.wg_public_key,
-    wgPrivateKey: row.wg_private_key,
+    wgPrivateKey: open(row.wg_private_key),
     sshHost: row.ssh_host,
     sshPort: row.ssh_port,
     sshUser: row.ssh_user,
-    sshKey: row.ssh_key,
+    sshKey: open(row.ssh_key),
     sshKeyPath: row.ssh_key_path,
-    sshKeyBase64: row.ssh_key_base64,
+    sshKeyBase64: open(row.ssh_key_base64),
     intermediateHost: row.intermediate_host,
     intermediatePublicPort: row.intermediate_public_port,
-    hysteriaConfig: row.hysteria_config_json ? JSON.parse(row.hysteria_config_json) : null,
+    hysteriaConfig: (() => {
+      if (!row.hysteria_config_json) return null;
+      const parsed = JSON.parse(row.hysteria_config_json);
+      if (parsed && parsed.password) parsed.password = open(parsed.password);
+      return parsed;
+    })(),
     trafficStatsEnabled: row.traffic_stats_enabled,
     trafficStatsEndpoint: row.traffic_stats_endpoint,
-    trafficStatsSecret: row.traffic_stats_secret,
+    trafficStatsSecret: open(row.traffic_stats_secret),
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
     lastSeenAt: row.last_seen_at ? new Date(row.last_seen_at).toISOString() : null,
@@ -145,14 +151,24 @@ class VpnNodeStore {
       healthError: 'health_error',
     };
     const jsonColumns = new Set(['extra_json', 'hysteria_config_json']);
+    const secretColumns = new Set(['wg_private_key', 'ssh_key', 'ssh_key_base64', 'traffic_stats_secret']);
 
     const sets = [];
     const values = [];
     for (const [key, column] of Object.entries(columns)) {
       if (!(key in patch)) continue;
-      const value = jsonColumns.has(column)
-        ? (patch[key] == null ? null : JSON.stringify(patch[key]))
-        : patch[key];
+      let value;
+      if (column === 'hysteria_config_json') {
+        const configValue = patch[key] == null ? null : { ...patch[key] };
+        if (configValue?.password) configValue.password = seal(configValue.password);
+        value = configValue == null ? null : JSON.stringify(configValue);
+      } else if (column === 'extra_json') {
+        value = patch[key] == null ? null : JSON.stringify(patch[key]);
+      } else if (secretColumns.has(column)) {
+        value = seal(patch[key]);
+      } else {
+        value = patch[key];
+      }
       values.push(value);
       sets.push(`${column} = $${values.length}`);
     }
