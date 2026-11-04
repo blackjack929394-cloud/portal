@@ -990,7 +990,7 @@ function Cabinet({
 
         {tab === 'subscription' && (
           <div className="cabinet-grid">
-            <section className="cabinet-hero">
+            <section className="cabinet-hero cabinet-sub-hero">
               <span className="cabinet-kicker">{t('cabinetFormat')}</span>
               <div className="fmt-list cabinet-formats" role="radiogroup">
                 {[...(sub.secureSubscriptionUrl ? ['enc'] : []), 'singbox', 'sub', 'link'].map((f) => (

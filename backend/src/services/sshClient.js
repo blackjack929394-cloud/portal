@@ -38,10 +38,17 @@ export class SshClient {
     });
   }
 
-  async exec(command) {
+  async exec(command, { timeoutMs = 60000 } = {}) {
     const conn = await this.connect();
+    let timer = null;
     try {
       return await new Promise((resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`SSH command timeout after ${timeoutMs} ms`));
+          conn.end();
+        }, timeoutMs);
+        timer.unref?.();
+
         conn.exec(command, (err, stream) => {
           if (err) return reject(err);
           let stdout = '';
@@ -50,6 +57,7 @@ export class SshClient {
           stream
             .on('close', (exitCode) => {
               code = exitCode;
+              clearTimeout(timer);
               resolve({ code, stdout, stderr });
             })
             .on('data', (data) => {
@@ -61,6 +69,7 @@ export class SshClient {
         });
       });
     } finally {
+      clearTimeout(timer);
       conn.end();
     }
   }

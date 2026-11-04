@@ -14,6 +14,7 @@ async function fetchNodeTrafficStats(node) {
   try {
     const res = await fetch(node.trafficStatsEndpoint, {
       headers: node.trafficStatsSecret ? { Authorization: node.trafficStatsSecret } : {},
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
       logger.warn({ nodeId: node.id, status: res.status, endpoint: node.trafficStatsEndpoint }, 'Hysteria traffic stats request failed');

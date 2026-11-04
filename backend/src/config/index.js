@@ -88,6 +88,14 @@ const config = {
     expiredRetentionDays: intFromEnv('VPN_EXPIRED_RETENTION_DAYS', 30, { min: 0 }),
     maintenanceIntervalMs: intFromEnv('VPN_MAINTENANCE_INTERVAL_MS', 60 * 60 * 1000, { min: 60000 }),
   },
+  // Health-check нод: период, таймаут одной пробы и порог падений
+  // для автоматического исключения ноды из подписки.
+  nodeHealth: {
+    intervalMs: intFromEnv('NODE_HEALTH_INTERVAL_MS', 30 * 1000, { min: 5000 }),
+    timeoutMs: intFromEnv('NODE_HEALTH_TIMEOUT_MS', 5000, { min: 500 }),
+    failThreshold: intFromEnv('NODE_HEALTH_FAIL_THRESHOLD', 2, { min: 1 }),
+    recoveryThreshold: intFromEnv('NODE_HEALTH_RECOVERY_THRESHOLD', 1, { min: 1 }),
+  },
   // VLESS + Reality: второй вход (TCP 443) для клиентов на ядре Xray (Happ).
   // Параметры Reality (публичные) — из env; приватный ключ живёт только на ноде.
   // Пусто (нет publicKey) → vless-ссылка не выдаётся.

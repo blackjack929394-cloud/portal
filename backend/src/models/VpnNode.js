@@ -38,6 +38,11 @@ function rowToNode(row) {
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
     lastSeenAt: row.last_seen_at ? new Date(row.last_seen_at).toISOString() : null,
+    healthStatus: row.health_status || 'unknown',
+    healthCheckedAt: row.health_checked_at ? new Date(row.health_checked_at).toISOString() : null,
+    healthLatencyMs: row.health_latency_ms ?? null,
+    healthFailCount: row.health_fail_count ?? 0,
+    healthError: row.health_error || null,
   };
 }
 
@@ -101,27 +106,90 @@ class VpnNodeStore {
     return rowToNode(rows[0]);
   }
 
+  // Атомарный UPDATE только переданных полей. Раньше метод делал
+  // read-modify-write и затирал поля, которые параллельно менял health-check.
   async update(id, patch) {
-    const existing = await this.get(id);
-    if (!existing) return null;
-    const rec = { ...existing, ...patch, updatedAt: new Date().toISOString() };
-    await query(
-      `UPDATE vpn_nodes SET
-        name = $1, host = $2, port = $3, protocol = $4, kind = $5, region = $6, provider = $7, status = $8, public_key = $9, extra_json = $10,
-        deployment_status = $11, deployment_error = $12, wg_tunnel_ip = $13, wg_public_key = $14, wg_private_key = $15,
-        ssh_host = $16, ssh_port = $17, ssh_user = $18, ssh_key = $19, ssh_key_path = $20, ssh_key_base64 = $21,
-        intermediate_host = $22, intermediate_public_port = $23, hysteria_config_json = $24,
-        traffic_stats_enabled = $25, traffic_stats_endpoint = $26, traffic_stats_secret = $27,
-        updated_at = $28, last_seen_at = $29
-       WHERE id = $30`,
-      [rec.name, rec.host, rec.port, rec.protocol, rec.kind, rec.region, rec.provider, rec.status, rec.publicKey, JSON.stringify(rec.extra || {}),
-        rec.deploymentStatus, rec.deploymentError, rec.wgTunnelIp, rec.wgPublicKey, rec.wgPrivateKey,
-        rec.sshHost, rec.sshPort, rec.sshUser, rec.sshKey, rec.sshKeyPath, rec.sshKeyBase64,
-        rec.intermediateHost, rec.intermediatePublicPort, JSON.stringify(rec.hysteriaConfig),
-        rec.trafficStatsEnabled, rec.trafficStatsEndpoint, rec.trafficStatsSecret,
-        rec.updatedAt, rec.lastSeenAt, rec.id],
+    const columns = {
+      name: 'name',
+      host: 'host',
+      port: 'port',
+      protocol: 'protocol',
+      kind: 'kind',
+      region: 'region',
+      provider: 'provider',
+      status: 'status',
+      publicKey: 'public_key',
+      extra: 'extra_json',
+      deploymentStatus: 'deployment_status',
+      deploymentError: 'deployment_error',
+      wgTunnelIp: 'wg_tunnel_ip',
+      wgPublicKey: 'wg_public_key',
+      wgPrivateKey: 'wg_private_key',
+      sshHost: 'ssh_host',
+      sshPort: 'ssh_port',
+      sshUser: 'ssh_user',
+      sshKey: 'ssh_key',
+      sshKeyPath: 'ssh_key_path',
+      sshKeyBase64: 'ssh_key_base64',
+      intermediateHost: 'intermediate_host',
+      intermediatePublicPort: 'intermediate_public_port',
+      hysteriaConfig: 'hysteria_config_json',
+      trafficStatsEnabled: 'traffic_stats_enabled',
+      trafficStatsEndpoint: 'traffic_stats_endpoint',
+      trafficStatsSecret: 'traffic_stats_secret',
+      lastSeenAt: 'last_seen_at',
+      healthStatus: 'health_status',
+      healthCheckedAt: 'health_checked_at',
+      healthLatencyMs: 'health_latency_ms',
+      healthFailCount: 'health_fail_count',
+      healthError: 'health_error',
+    };
+    const jsonColumns = new Set(['extra_json', 'hysteria_config_json']);
+
+    const sets = [];
+    const values = [];
+    for (const [key, column] of Object.entries(columns)) {
+      if (!(key in patch)) continue;
+      const value = jsonColumns.has(column)
+        ? (patch[key] == null ? null : JSON.stringify(patch[key]))
+        : patch[key];
+      values.push(value);
+      sets.push(`${column} = $${values.length}`);
+    }
+    if (sets.length === 0) return this.get(id);
+
+    sets.push('updated_at = NOW()');
+    values.push(id);
+    const { rows } = await query(
+      `UPDATE vpn_nodes SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING *`,
+      values,
     );
-    return rec;
+    return rowToNode(rows[0]);
+  }
+
+  async addHealthCheck(nodeId, { status, latencyMs = null, error = null }) {
+    await query(
+      `INSERT INTO vpn_node_health_checks (node_id, status, latency_ms, error)
+       VALUES ($1, $2, $3, $4)`,
+      [nodeId, status, latencyMs, error],
+    );
+  }
+
+  async listHealthChecks(nodeId, limit = 50) {
+    const { rows } = await query(
+      `SELECT status, latency_ms, error, checked_at
+         FROM vpn_node_health_checks
+        WHERE node_id = $1
+        ORDER BY checked_at DESC
+        LIMIT $2`,
+      [nodeId, Math.min(Math.max(limit, 1), 500)],
+    );
+    return rows.map((r) => ({
+      status: r.status,
+      latencyMs: r.latency_ms,
+      error: r.error,
+      checkedAt: new Date(r.checked_at).toISOString(),
+    }));
   }
 
   async delete(id) {
@@ -131,6 +199,20 @@ class VpnNodeStore {
   async listAll() {
     const { rows } = await query('SELECT * FROM vpn_nodes ORDER BY created_at DESC');
     return rows.map(rowToNode);
+  }
+
+  // После падения процесса нода могла остаться в статусе deploying навсегда.
+  // При старте возвращаем такие записи в failed, чтобы админ увидел проблему.
+  async reconcileStuckDeployments() {
+    const { rows } = await query(
+      `UPDATE vpn_nodes
+          SET deployment_status = 'failed',
+              deployment_error = COALESCE(deployment_error, 'deployment interrupted by process restart'),
+              updated_at = NOW()
+        WHERE deployment_status = 'deploying'
+        RETURNING id, name`,
+    );
+    return rows;
   }
 
   async listActive() {

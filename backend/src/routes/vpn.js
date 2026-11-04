@@ -35,6 +35,7 @@ adminRouter.post('/nodes/:id/deploy', ctrl.deployNodeController);
 adminRouter.get('/nodes/:id/deploy-status', ctrl.getDeployStatus);
 adminRouter.post('/nodes/:id/redeploy', ctrl.redeployNodeController);
 adminRouter.post('/nodes/:id/rotate-wg-keys', ctrl.rotateWgKeysController);
+adminRouter.get('/nodes/:id/health', ctrl.getNodeHealthController);
 adminRouter.get('/subscriptions', ctrl.listSubscriptions);
 adminRouter.get('/pending', ctrl.listPendingSubscriptions);
 adminRouter.get('/chats', ctrl.listChats);

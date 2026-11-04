@@ -381,7 +381,7 @@ function NodesTab({ token, notify }) {
       {rows.length === 0 ? <p className="admin-msg">Нод пока нет.</p> : (
         <div className="table-wrap">
           <table className="atable">
-            <thead><tr><th>Имя</th><th>Хост</th><th>Порт</th><th>Тип</th><th>Регион</th><th>Статус</th><th>Деплой</th><th>Действия</th></tr></thead>
+            <thead><tr><th>Имя</th><th>Хост</th><th>Порт</th><th>Тип</th><th>Регион</th><th>Здоровье</th><th>Статус</th><th>Деплой</th><th>Действия</th></tr></thead>
             <tbody>
               {rows.map((r) => editId === r.id ? (
                 <tr key={r.id} className="edit-row">
@@ -390,7 +390,7 @@ function NodesTab({ token, notify }) {
                   <td><input type="number" style={{ width: 70 }} value={edit.port} onChange={(e) => setEdit(x => ({ ...x, port: parseInt(e.target.value) || r.port }))} /></td>
                   <td>{r.kind}</td>
                   <td><input value={edit.region} onChange={(e) => setEdit(x => ({ ...x, region: e.target.value }))} /></td>
-                  <td colSpan={2} className="dim">Провайдер: <input value={edit.provider} onChange={(e) => setEdit(x => ({ ...x, provider: e.target.value }))} /></td>
+                  <td colSpan={3} className="dim">Провайдер: <input value={edit.provider} onChange={(e) => setEdit(x => ({ ...x, provider: e.target.value }))} /></td>
                   <td><button className="btn primary xs" onClick={saveEdit}>Сохранить</button><button className="btn ghost xs" onClick={() => setEditId(null)}>Отмена</button></td>
                 </tr>
               ) : (
@@ -400,6 +400,13 @@ function NodesTab({ token, notify }) {
                   <td>{r.port}</td>
                   <td>{r.kind}</td>
                   <td>{r.region || '—'}</td>
+                  <td>
+                    <span className={`badge ${r.healthStatus === 'up' ? 'active' : r.healthStatus === 'down' ? 'fail' : 'pending'}`}>
+                      {r.healthStatus === 'up' ? 'ok' : r.healthStatus === 'down' ? 'down' : r.healthStatus || 'unknown'}
+                    </span>
+                    {r.healthLatencyMs != null && <div className="dim mono">{r.healthLatencyMs} ms</div>}
+                    {r.healthError && <div className="note err-text" title={r.healthError}>{r.healthError.slice(0, 30)}</div>}
+                  </td>
                   <td><span className={`badge ${r.effectiveStatus || r.status}`}>{NODE_STATUS[r.effectiveStatus || r.status] || r.effectiveStatus || r.status}</span></td>
                   <td>
                     <span className={`badge ${r.deploymentStatus || 'pending'}`}>{DEPLOY_STATUS[r.deploymentStatus] || 'ожидает'}</span>

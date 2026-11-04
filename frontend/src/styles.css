@@ -1403,6 +1403,7 @@ ol.steps .step-n {
 .cabinet-hero-side .cabinet-hero-foot { margin-top: auto; }
 .cabinet-title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
+.cabinet-sub-hero { grid-column: span 8; }
 .cabinet-app { grid-column: span 4; }
 .cabinet-routing { grid-column: span 4; }
 .cabinet-devices { grid-column: span 4; }
@@ -1532,6 +1533,7 @@ ol.steps .step-n {
 @media (max-width: 1080px) {
   .cabinet { grid-template-columns: 232px minmax(0, 1fr); gap: 16px; }
   .cabinet-hero-overview { grid-template-columns: minmax(0, 1fr); }
+  .cabinet-sub-hero { grid-column: 1 / -1; }
   .cabinet-side-col { display: grid; grid-template-columns: 1fr 1fr; }
 }
 
@@ -1539,7 +1541,8 @@ ol.steps .step-n {
   .cabinet { grid-template-columns: minmax(0, 1fr); }
   .cabinet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cabinet-hero,
-  .cabinet-hero-overview { grid-column: 1 / -1; }
+  .cabinet-hero-overview,
+  .cabinet-sub-hero { grid-column: 1 / -1; }
   .cabinet-app,
   .cabinet-routing,
   .cabinet-qr-card { grid-column: span 1; }

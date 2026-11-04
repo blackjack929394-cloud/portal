@@ -20,6 +20,10 @@ export async function listNodes() {
 export async function listActiveNodes() {
   const nodes = await vpnNodeStore.listActive();
   return nodes.filter((node) => {
+    // Нода, которую health-check признал упавшей (N провалов подряд),
+    // автоматически выпадает из выдачи подписки. После успешной пробы
+    // health-check вернёт её обратно.
+    if (node.healthStatus === 'down') return false;
     if (node.kind === 'hysteria2') {
       return node.status === 'active' && node.deploymentStatus === 'active';
     }

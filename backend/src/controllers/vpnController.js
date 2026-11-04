@@ -457,6 +457,29 @@ export async function getStats(req, res) {
 // Список зарегистрированных пользователей (локальные + SSO/employee).
 // ── Мониторинг устройств приложения (админка) ───────────────────────────────
 
+export async function getNodeHealthController(req, res, next) {
+  try {
+    const node = await vpnNodeStore.get(req.params.id);
+    if (!node) return res.status(404).json({ error: 'NOT_FOUND' });
+    const limit = Number(req.query.limit) || 50;
+    return res.json({
+      node: {
+        id: node.id,
+        name: node.name,
+        healthStatus: node.healthStatus,
+        healthCheckedAt: node.healthCheckedAt,
+        healthLatencyMs: node.healthLatencyMs,
+        healthFailCount: node.healthFailCount,
+        healthError: node.healthError,
+        lastSeenAt: node.lastSeenAt,
+      },
+      checks: await vpnNodeStore.listHealthChecks(node.id, limit),
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export async function listAppDevicesController(req, res, next) {
   try {
     return res.json({ devices: await listAllAppDevices() });
