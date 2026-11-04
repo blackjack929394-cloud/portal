@@ -419,6 +419,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             "EXPIRED" -> s["qrExpired"]
             "CANCELLED" -> s["qrCancelled"]
             "ALREADY_USED", "ALREADY_SCANNED", "ALREADY_CONFIRMED" -> s["qrAlreadyUsed"]
+            "DEVICE_LIMIT_REACHED" -> s["qrDeviceLimit"]
             else -> e.details ?: e.message
         }
         is NetworkException -> s["errNetwork"]

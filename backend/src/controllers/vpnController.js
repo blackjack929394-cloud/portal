@@ -14,6 +14,7 @@ import {
 } from '../store/userDirectory.js';
 import { PRESETS, getProfile, saveProfile } from '../services/routingService.js';
 import { listAllAppDevices, revokeAppTokenById } from '../services/appAuthService.js';
+import { getUserLimits, setUserLimits } from '../services/userLimitsService.js';
 
 // Публичный базовый URL: из конфига (PUBLIC_BASE_URL), иначе из запроса.
 function baseUrlFor(req) {
@@ -99,9 +100,10 @@ export async function createSubscription(req, res) {
     return res.status(400).json({ error: 'INVALID_TTL_DAYS', details: 'ttlDays must be a positive integer' });
   }
 
+  const userLimits = await getUserLimits(user.sub);
   const effectiveTraffic = trafficLimitGb !== undefined && trafficLimitGb !== null && trafficLimitGb !== ''
     ? parsePositiveInt(trafficLimitGb, null)
-    : config.vpn.defaultTrafficLimitGb;
+    : userLimits.trafficLimitGb;
   if (trafficLimitGb !== undefined && trafficLimitGb !== null && trafficLimitGb !== '' && effectiveTraffic === null) {
     return res.status(400).json({ error: 'INVALID_TRAFFIC_LIMIT', details: 'trafficLimitGb must be a positive integer' });
   }
@@ -474,18 +476,70 @@ export async function revokeAppDeviceAdminController(req, res, next) {
   }
 }
 
-export async function listUsersController(req, res) {
-  const localUsers = (await listUsers()).map((u) => ({ ...u, kind: 'user' }));
-  const employees = (await listEmployees()).map((e) => ({
-    username: `sso:${e.sub}`,
-    fullName: e.fullName,
-    email: e.email,
-    createdAt: e.createdAt,
-    lastLogin: e.lastLogin,
-    blocked: e.blocked,
-    kind: 'employee',
-  }));
-  return res.json({ users: [...localUsers, ...employees] });
+function subForUsername(username) {
+  return username.startsWith('sso:') ? username.slice(4) : `local:${username}`;
+}
+
+export async function listUsersController(req, res, next) {
+  try {
+    const localUsers = (await listUsers()).map((u) => ({ ...u, kind: 'user' }));
+    const employees = (await listEmployees()).map((e) => ({
+      username: `sso:${e.sub}`,
+      fullName: e.fullName,
+      email: e.email,
+      createdAt: e.createdAt,
+      lastLogin: e.lastLogin,
+      blocked: e.blocked,
+      kind: 'employee',
+    }));
+    const users = await Promise.all(
+      [...localUsers, ...employees].map(async (u) => {
+        const userSub = subForUsername(u.username);
+        const limits = await getUserLimits(userSub);
+        return {
+          ...u,
+          userSub,
+          deviceLimit: limits.deviceLimit,
+          trafficLimitGb: limits.trafficLimitGb,
+        };
+      }),
+    );
+    return res.json({ users });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// Изменение лимитов аккаунта: количество устройств и ГБ трафика.
+export async function updateUserLimitsController(req, res, next) {
+  try {
+    const username = req.params.username;
+    const userSub = subForUsername(username);
+    const body = req.body || {};
+    const deviceLimit = body.deviceLimit === undefined ? undefined : parsePositiveInt(body.deviceLimit, null);
+    const trafficLimitGb = body.trafficLimitGb === undefined ? undefined : parsePositiveInt(body.trafficLimitGb, null);
+    if ((body.deviceLimit !== undefined && deviceLimit === null)
+      || (body.trafficLimitGb !== undefined && trafficLimitGb === null)) {
+      return res.status(400).json({ error: 'INVALID_LIMIT' });
+    }
+    if (deviceLimit !== undefined && (deviceLimit < 1 || deviceLimit > 50)) {
+      return res.status(400).json({ error: 'INVALID_DEVICE_LIMIT' });
+    }
+    if (trafficLimitGb !== undefined && (trafficLimitGb < 1 || trafficLimitGb > 100000)) {
+      return res.status(400).json({ error: 'INVALID_TRAFFIC_LIMIT' });
+    }
+
+    const limits = await setUserLimits(userSub, { deviceLimit, trafficLimitGb });
+    // Действующий лимит трафика сразу применяем к текущей подписке.
+    if (trafficLimitGb !== undefined) {
+      const sub = await vpnService.getUserSubscription(userSub);
+      if (sub) await vpnService.updateSubscription(sub.id, { trafficLimitGb });
+    }
+    audit('admin.user_limits_updated', { userSub, deviceLimit, trafficLimitGb });
+    return res.json({ limits });
+  } catch (err) {
+    return next(err);
+  }
 }
 
 // Блокировка / разблокировка пользователя. При блокировке отзываем его доступ.

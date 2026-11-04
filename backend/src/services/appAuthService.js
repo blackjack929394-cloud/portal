@@ -2,6 +2,7 @@ import config from '../config/index.js';
 import { appAuthStore, hashSecret } from '../models/AppAuth.js';
 import { generateToken } from '../utils/secureToken.js';
 import { audit } from './auditService.js';
+import { getUserLimits } from './userLimitsService.js';
 
 // Логика QR-входа:
 //   сайт (уже авторизован)  → pending
@@ -156,6 +157,13 @@ export async function claimQrLogin(code) {
   if (session.status === 'cancelled') return { error: 'CANCELLED' };
   if (session.status === 'approved') return { error: 'ALREADY_USED' };
   if (session.status !== 'confirmed') return { error: 'NOT_CONFIRMED' };
+
+  // Лимит устройств на аккаунт (по умолчанию 5, админ может изменить).
+  const limits = await getUserLimits(session.userSub);
+  const activeDevices = await appAuthStore.countActiveTokens(session.userSub);
+  if (activeDevices >= limits.deviceLimit) {
+    return { error: 'DEVICE_LIMIT_REACHED', limit: limits.deviceLimit };
+  }
 
   const token = generateToken(32);
   const expiresAt = new Date(

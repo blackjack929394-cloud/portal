@@ -75,3 +75,4 @@ export const listDevices = (token) => vpnGet('/vpn/devices', token).then((d) => 
 export const revokeDevice = (token, id) => vpnDelete(`/vpn/devices/${id}`, token);
 export const deleteUser = (token, username) => vpnDelete(`/vpn/users/${encodeURIComponent(username)}`, token);
 export const setUserBlocked = (token, username, blocked) => vpnPost(`/vpn/users/${encodeURIComponent(username)}/block`, token, { blocked });
+export const saveUserLimits = (token, username, body) => vpnPatch(`/vpn/users/${encodeURIComponent(username)}/limits`, token, body);

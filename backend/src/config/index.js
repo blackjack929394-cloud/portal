@@ -50,6 +50,9 @@ const config = {
   appAuth: {
     qrTtlSeconds: intFromEnv('APP_QR_TTL_SECONDS', 180, { min: 30 }),
     tokenTtlDays: intFromEnv('APP_TOKEN_TTL_DAYS', 90, { min: 1 }),
+    // Сколько устройств может быть подключено к одному аккаунту по умолчанию.
+    // Админ может переопределить лимит для конкретного аккаунта.
+    deviceLimit: intFromEnv('APP_DEVICE_LIMIT', 5, { min: 1 }),
     // Шаблон deep-link, который кодируется в QR. `{code}` заменяется на код.
     // Приложение должно уметь разбирать этот адрес.
     deepLinkTemplate: process.env.APP_LOGIN_DEEPLINK || 'dogma://login?code={code}',
@@ -76,7 +79,7 @@ const config = {
     defaultTtlDays: parseInt(process.env.VPN_DEFAULT_TTL_DAYS || '30', 10),
     defaultTrafficLimitGb: process.env.VPN_DEFAULT_TRAFFIC_LIMIT_GB
       ? parseInt(process.env.VPN_DEFAULT_TRAFFIC_LIMIT_GB, 10)
-      : null,
+      : 150,
     // Секрет для зашифрованного формата подписки (format=enc). Тот же секрет
     // зашит в десктоп-клиент Dogma. Пусто → формат недоступен (501).
     subscriptionEncSecret: process.env.SUBSCRIPTION_ENC_SECRET || '',

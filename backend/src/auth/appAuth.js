@@ -27,10 +27,11 @@ const STATUS_BY_ERROR = {
   NOT_SCANNED: 409,
   NOT_CONFIRMED: 409,
   CONFLICT: 409,
+  DEVICE_LIMIT_REACHED: 409,
 };
 
-function fail(res, error) {
-  return res.status(STATUS_BY_ERROR[error] || 400).json({ error });
+function fail(res, error, extra = {}) {
+  return res.status(STATUS_BY_ERROR[error] || 400).json({ error, ...extra });
 }
 
 export function mountAppAuth(app) {
@@ -105,7 +106,9 @@ export function mountAppAuth(app) {
       const parsed = codeSchema.safeParse(req.body || {});
       if (!parsed.success) return res.status(400).json({ error: 'VALIDATION_ERROR' });
       const result = await claimQrLogin(parsed.data.code);
-      if (result.error) return fail(res, result.error);
+      if (result.error) {
+        return fail(res, result.error, result.limit ? { limit: result.limit } : {});
+      }
       return res.json(result);
     } catch (err) {
       return next(err);

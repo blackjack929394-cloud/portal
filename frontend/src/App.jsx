@@ -275,9 +275,15 @@ export default function App() {
   const [routingPresets, setRoutingPresets] = useState([]);
   const isMobile = useMediaQuery('(max-width: 720px)');
   const [mobileSection, setMobileSection] = useState(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatUnread, setChatUnread] = useState(0);
 
   useEffect(() => {
     if (!isMobile || !auth || auth === false || phase !== 'ready') setMobileSection(null);
+    if (!auth || auth === false) {
+      setChatOpen(false);
+      setChatUnread(0);
+    }
   }, [isMobile, auth, phase]);
 
   function loadDevices() {
@@ -496,6 +502,8 @@ export default function App() {
               setCabinetTab(section);
               setMobileSection(section);
             }}
+            onOpenChat={() => setChatOpen(true)}
+            chatUnread={chatUnread}
           />
         )}
 
@@ -595,7 +603,14 @@ export default function App() {
         )}
       </main>
 
-      {auth && auth !== false && <ChatWidget t={t} />}
+      {auth && auth !== false && (
+        <ChatWidget
+          t={t}
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          onUnread={setChatUnread}
+        />
+      )}
       {qrOpen && auth && auth !== false && (
         <AppLoginModal t={t} onClose={closeQrModal} />
       )}
@@ -697,6 +712,11 @@ const CABINET_ICONS = {
       <path d="M5 21h14" />
     </>
   ),
+  chat: (
+    <>
+      <path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" />
+    </>
+  ),
 };
 
 function CabinetIcon({ name }) {
@@ -728,7 +748,7 @@ function Cabinet({
   onRevoke, onOpenQr, tab, onTab,
   devices, devicesLoading, devicesError, onReloadDevices, onRevokeDevice,
   routingProfile, routingPresets, onRoutingSaved, lang,
-  isMobile, mobileSection, onMobileSection,
+  isMobile, mobileSection, onMobileSection, onOpenChat, chatUnread,
 }) {
   const initial = (auth.name || auth.email || '?').trim().charAt(0).toUpperCase();
   const expires = formatDay(sub.expiresAt, lang);
@@ -792,6 +812,15 @@ function Cabinet({
               </span>
               <span className="mhome-chevron" aria-hidden="true">›</span>
             </a>
+            <button className="mhome-item" onClick={onOpenChat}>
+              <span className="mhome-icon"><CabinetIcon name="chat" /></span>
+              <span className="mhome-copy">
+                <span className="mhome-title">{t('chatTitle')}</span>
+                <span className="mhome-hint">{t('cabinetChatHint')}</span>
+              </span>
+              {chatUnread > 0 && <span className="mhome-badge">{chatUnread}</span>}
+              <span className="mhome-chevron" aria-hidden="true">›</span>
+            </button>
           </nav>
         </div>
       </div>
@@ -829,6 +858,17 @@ function Cabinet({
           <span className="cabinet-side-meta">
             {expires ? `${t('cabinetUntil')} ${expires}` : t('cabinetNoExpiry')}
           </span>
+        </div>
+
+        <div className="cabinet-chat">
+          <button className="cabinet-chat-btn" onClick={onOpenChat}>
+            <span className="mhome-icon"><CabinetIcon name="chat" /></span>
+            <span className="mhome-copy">
+              <span className="mhome-title">{t('chatTitle')}</span>
+              <span className="mhome-hint">{t('cabinetChatHint')}</span>
+            </span>
+            {chatUnread > 0 && <span className="mhome-badge">{chatUnread}</span>}
+          </button>
         </div>
 
       </aside>
@@ -1210,21 +1250,23 @@ function RoutingPanel({ t, disabled = false, primaryLabel, onSaved, showHeading 
 }
 
 // Плавающий чат с поддержкой (всегда в углу, пока пользователь авторизован).
-function ChatWidget({ t }) {
-  const [open, setOpen] = useState(false);
+function ChatWidget({ t, open, onClose, onUnread }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [unread, setUnread] = useState(0);
   const bodyRef = useRef(null);
 
   async function loadUnread() {
-    setUnread(await getMyChatUnread());
+    const n = await getMyChatUnread();
+    setUnread(n);
+    onUnread?.(n);
   }
   async function loadMessages() {
     try {
       const { messages: m } = await getMyChat();
       setMessages(m || []);
       setUnread(0);
+      onUnread?.(0);
     } catch { /* ignore */ }
   }
 
@@ -1249,44 +1291,31 @@ function ChatWidget({ t }) {
     } catch { /* ignore */ }
   }
 
+  if (!open) return null;
+
   return (
-    <div className="chat-fab-wrap">
-      {open && (
-        <div className="chat-panel">
-          <div className="chat-head">
-            <span>{t('chatTitle')}</span>
-            <button className="chat-x" onClick={() => setOpen(false)} aria-label="close">×</button>
+    <div className="chat-panel chat-panel-fixed">
+      <div className="chat-head">
+        <span>{t('chatTitle')}</span>
+        <button className="chat-x" onClick={onClose} aria-label="close">×</button>
+      </div>
+      <div className="chat-body" ref={bodyRef}>
+        {messages.length === 0 && <p className="chat-empty">{t('chatEmpty')}</p>}
+        {messages.map((m) => (
+          <div key={m.id} className={`chat-msg ${m.sender === 'user' ? 'me' : 'them'}`}>
+            <div className="chat-bubble">{m.text}</div>
           </div>
-          <div className="chat-body" ref={bodyRef}>
-            {messages.length === 0 && <p className="chat-empty">{t('chatEmpty')}</p>}
-            {messages.map((m) => (
-              <div key={m.id} className={`chat-msg ${m.sender === 'user' ? 'me' : 'them'}`}>
-                <div className="chat-bubble">{m.text}</div>
-              </div>
-            ))}
-          </div>
-          <div className="chat-input">
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') onSend(); }}
-              placeholder={t('chatPh')}
-            />
-            <button className="btn primary" onClick={onSend} disabled={!text.trim()}>{t('chatSend')}</button>
-          </div>
-        </div>
-      )}
-      <button className="chat-fab" onClick={() => setOpen((o) => !o)} title={t('chatTitle')}>
-        {open ? (
-          <span className="chat-fab-x">×</span>
-        ) : (
-          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-            <path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"
-              fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-          </svg>
-        )}
-        {!open && unread > 0 && <span className="chat-fab-badge">{unread}</span>}
-      </button>
+        ))}
+      </div>
+      <div className="chat-input">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') onSend(); }}
+          placeholder={t('chatPh')}
+        />
+        <button className="btn primary" onClick={onSend} disabled={!text.trim()}>{t('chatSend')}</button>
+      </div>
     </div>
   );
 }

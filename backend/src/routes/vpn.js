@@ -49,6 +49,7 @@ adminRouter.get('/stats', ctrl.getStats);
 adminRouter.get('/devices', ctrl.listAppDevicesController);
 adminRouter.delete('/devices/:id', ctrl.revokeAppDeviceAdminController);
 adminRouter.get('/users', ctrl.listUsersController);
+adminRouter.patch('/users/:username/limits', ctrl.updateUserLimitsController);
 adminRouter.get('/users/:username/routing', ctrl.getUserRoutingController);
 adminRouter.post('/users/:username/block', ctrl.setUserBlockedController);
 adminRouter.delete('/users/:username', ctrl.deleteUserController);

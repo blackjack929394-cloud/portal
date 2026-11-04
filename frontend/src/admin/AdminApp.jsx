@@ -25,6 +25,7 @@ import {
   getStats,
   listDevices,
   revokeDevice,
+  saveUserLimits,
 } from './adminApi.js';
 import DogmaLogo from '../components/DogmaLogo.jsx';
 
@@ -543,6 +544,9 @@ function UsersTab({ token, notify }) {
   const [q, setQ] = useState('');
   const [routingFor, setRoutingFor] = useState(null);
   const [routing, setRouting] = useState(null);
+  const [limitsFor, setLimitsFor] = useState(null);
+  const [limitsForm, setLimitsForm] = useState({ deviceLimit: 5, trafficLimitGb: 150 });
+  const [limitsBusy, setLimitsBusy] = useState(false);
 
   async function onDelete(u) {
     if (!confirm(`Удалить пользователя ${u.fullName || u.username}? Его подписки и переписка будут удалены, доступ отключится.`)) return;
@@ -556,7 +560,36 @@ function UsersTab({ token, notify }) {
   async function onRouting(u) {
     if (routingFor === u.username) { setRoutingFor(null); return; }
     setRoutingFor(u.username); setRouting(null);
+    setLimitsFor(null);
     try { setRouting(await getUserRouting(token, u.username)); } catch (e) { notify(e.message, 'err'); }
+  }
+
+  function onLimits(u) {
+    if (limitsFor === u.username) { setLimitsFor(null); return; }
+    setRoutingFor(null);
+    setLimitsFor(u.username);
+    setLimitsForm({
+      deviceLimit: u.deviceLimit ?? 5,
+      trafficLimitGb: u.trafficLimitGb ?? 150,
+    });
+  }
+
+  async function saveLimits() {
+    if (!limitsFor) return;
+    setLimitsBusy(true);
+    try {
+      await saveUserLimits(token, limitsFor, {
+        deviceLimit: Number(limitsForm.deviceLimit),
+        trafficLimitGb: Number(limitsForm.trafficLimitGb),
+      });
+      await reload();
+      notify('Лимиты сохранены');
+      setLimitsFor(null);
+    } catch (e) {
+      notify(e.message, 'err');
+    } finally {
+      setLimitsBusy(false);
+    }
   }
 
   if (err && !rows) return <p className="admin-msg err-text">{err}</p>;
@@ -574,7 +607,7 @@ function UsersTab({ token, notify }) {
       {filtered.length === 0 ? <p className="admin-msg">Ничего не найдено.</p> : (
         <div className="table-wrap">
           <table className="atable">
-            <thead><tr><th>Логин</th><th>Пользователь</th><th>Статус</th><th>Регистрация</th><th>Последний вход</th><th>Действия</th></tr></thead>
+            <thead><tr><th>Логин</th><th>Пользователь</th><th>Статус</th><th>Лимиты</th><th>Регистрация</th><th>Последний вход</th><th>Действия</th></tr></thead>
             <tbody>
               {filtered.map((u) => (
                 <Fragment key={u.username}>
@@ -585,16 +618,37 @@ function UsersTab({ token, notify }) {
                       {u.email && <div className="cell-sub">{u.email}</div>}
                     </td>
                     <td><span className={`badge ${u.blocked ? 'fail' : 'active'}`}>{u.blocked ? 'заблокирован' : 'активен'}</span></td>
+                    <td className="dim mono">{u.deviceLimit} устр. · {u.trafficLimitGb} ГБ</td>
                     <td className="dim">{fmtDate(u.createdAt)}</td>
                     <td className="dim">{u.lastLogin ? fmt(u.lastLogin) : '—'}</td>
                     <td className="row-actions">
+                      <button className="btn ghost xs" onClick={() => onLimits(u)}>{limitsFor === u.username ? 'Скрыть' : 'Лимиты'}</button>
                       <button className="btn ghost xs" onClick={() => onRouting(u)}>{routingFor === u.username ? 'Скрыть' : 'Маршруты'}</button>
                       <button className="btn ghost xs" onClick={() => onToggleBlock(u)}>{u.blocked ? 'Разблок.' : 'Блок'}</button>
                       <button className="btn ghost xs danger" onClick={() => onDelete(u)}>Удалить</button>
                     </td>
                   </tr>
+                  {limitsFor === u.username && (
+                    <tr className="edit-row"><td colSpan={7}>
+                      <div className="limits-editor">
+                        <label className="field">
+                          <span className="field-label">Устройств на аккаунт</span>
+                          <input type="number" min="1" max="50" value={limitsForm.deviceLimit}
+                            onChange={(e) => setLimitsForm((f) => ({ ...f, deviceLimit: e.target.value }))} />
+                        </label>
+                        <label className="field">
+                          <span className="field-label">Лимит трафика, ГБ</span>
+                          <input type="number" min="1" max="100000" value={limitsForm.trafficLimitGb}
+                            onChange={(e) => setLimitsForm((f) => ({ ...f, trafficLimitGb: e.target.value }))} />
+                        </label>
+                        <button className="btn primary" disabled={limitsBusy} onClick={saveLimits}>
+                          {limitsBusy ? 'Сохранение…' : 'Сохранить'}
+                        </button>
+                      </div>
+                    </td></tr>
+                  )}
                   {routingFor === u.username && (
-                    <tr className="edit-row"><td colSpan={6}>
+                    <tr className="edit-row"><td colSpan={7}>
                       {!routing ? <span className="dim">Загрузка…</span> : <RoutingSummary p={routing} />}
                     </td></tr>
                   )}

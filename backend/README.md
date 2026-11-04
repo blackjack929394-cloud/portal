@@ -149,7 +149,8 @@ R80.30/R80.40/R81 (чинился JHF) — проверьте `openssl` пере
 - **Вход в приложение по QR.** Сайт создаёт одноразовый код, приложение
   сканирует его, пользователь подтверждает устройство на сайте, после чего
   приложение получает Bearer-токен. Миграция:
-  `psql "$DATABASE_URL" -f migrations/004_app_auth.sql`.
+  `psql "$DATABASE_URL" -f migrations/004_app_auth.sql`,
+  затем `psql "$DATABASE_URL" -f migrations/005_user_limits.sql`.
   Полное описание API и сценария — `docs/APP_QR_LOGIN.md`.
 - **Страница `/download`** с клиентами для Android и Windows. Метаданные
   отдаёт `GET /api/v1/clients`; файлы можно положить в

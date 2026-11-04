@@ -233,6 +233,19 @@ class AppAuthStore {
     return rows.map(rowToToken);
   }
 
+  // Считаем только живые токены: отозванные и истёкшие не занимают слот.
+  async countActiveTokens(userSub) {
+    const { rows } = await query(
+      `SELECT COUNT(*)::int AS count
+         FROM app_tokens
+        WHERE user_sub = $1
+          AND revoked_at IS NULL
+          AND expires_at > NOW()`,
+      [userSub],
+    );
+    return rows[0]?.count || 0;
+  }
+
   // Атомарно: confirmed → approved + выдача токена. Два одновременных claim
   // не создадут два токена — второй увидит, что статус уже не confirmed.
   async claimLoginSession({ id, token, expiresAt }) {
