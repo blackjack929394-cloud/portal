@@ -26,6 +26,19 @@ import AppLoginModal from './components/AppLoginModal.jsx';
 
 const STEP_INDEX = { form: 0, denied: 0, issuing: 1, pending: 1, routing: 2, ready: 3, error: 1 };
 
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() => (
+    typeof window !== 'undefined' ? window.matchMedia(query).matches : false
+  ));
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const onChange = (event) => setMatches(event.matches);
+    media.addEventListener?.('change', onChange);
+    return () => media.removeEventListener?.('change', onChange);
+  }, [query]);
+  return matches;
+}
+
 export default function App() {
   const [lang, setLang] = useState('ru');
   const t = useMemo(() => makeT(lang), [lang]);
@@ -260,6 +273,12 @@ export default function App() {
   const [devicesError, setDevicesError] = useState('');
   const [routingProfile, setRoutingProfile] = useState(null);
   const [routingPresets, setRoutingPresets] = useState([]);
+  const isMobile = useMediaQuery('(max-width: 720px)');
+  const [mobileSection, setMobileSection] = useState(null);
+
+  useEffect(() => {
+    if (!isMobile || !auth || auth === false || phase !== 'ready') setMobileSection(null);
+  }, [isMobile, auth, phase]);
 
   function loadDevices() {
     setDevicesLoading(true);
@@ -300,13 +319,24 @@ export default function App() {
   return (
     <div className="page">
       <header className="topbar">
+        {isMobile && auth && auth !== false && phase === 'ready' && mobileSection && (
+          <button className="topbar-back" onClick={() => setMobileSection(null)}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+              strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 5 8 12l7 7" />
+            </svg>
+            <span>{t('cabinetBack')}</span>
+          </button>
+        )}
         <div className="brand">
           <DogmaLogo />
           <span className="brand-tag">{t('brandTag')}</span>
         </div>
         <div className="topbar-right">
           <nav className="topbar-nav" aria-label={t('navLabel')}>
-            <a className="topbar-link is-current" href="/" aria-current="page">{t('cabinetNav')}</a>
+            {!(isMobile && mobileSection) && (
+              <a className="topbar-link is-current" href="/" aria-current="page">{t('cabinetNav')}</a>
+            )}
             <a className="topbar-link" href="/download">{t('downloadNav')}</a>
           </nav>
           {auth && auth !== false && (
@@ -436,6 +466,12 @@ export default function App() {
             routingPresets={routingPresets}
             onRoutingSaved={setRoutingProfile}
             lang={lang}
+            isMobile={isMobile}
+            mobileSection={mobileSection}
+            onMobileSection={(section) => {
+              setCabinetTab(section);
+              setMobileSection(section);
+            }}
           />
         )}
 
@@ -661,6 +697,7 @@ function Cabinet({
   onRevoke, onOpenQr, tab, onTab,
   devices, devicesLoading, devicesError, onReloadDevices, onRevokeDevice,
   routingProfile, routingPresets, onRoutingSaved, lang,
+  isMobile, mobileSection, onMobileSection,
 }) {
   const initial = (auth.name || auth.email || '?').trim().charAt(0).toUpperCase();
   const expires = formatDay(sub.expiresAt, lang);
@@ -675,8 +712,55 @@ function Cabinet({
     instructions: t('instructionsTitle'),
   }[tab];
 
+  if (isMobile && !mobileSection) {
+    const hints = {
+      overview: t('mhomeOverviewHint'),
+      subscription: t('mhomeSubscriptionHint'),
+      routing: t('mhomeRoutingHint'),
+      devices: t('mhomeDevicesHint'),
+      instructions: t('mhomeInstructionsHint'),
+    };
+    return (
+      <div className="cabinet cabinet-mobile-home">
+        <div className="mhome">
+          <div className="mhome-user">
+            <span className="cabinet-avatar">{initial}</span>
+            <div className="mhome-user-copy">
+              <div className="mhome-name">{auth.name || auth.email}</div>
+              {auth.name && auth.email && <div className="mhome-mail">{auth.email}</div>}
+            </div>
+          </div>
+
+          <div className="mhome-status">
+            <span className="cabinet-side-label">{t('cabinetSubscription')}</span>
+            <span className="cabinet-status"><span className="status-dot" />{t('subActive')}</span>
+            <span className="cabinet-side-meta">
+              {expires ? `${t('cabinetUntil')} ${expires}` : t('cabinetNoExpiry')}
+            </span>
+          </div>
+
+          <nav className="mhome-list" aria-label={t('cabinetTitle')}>
+            {CABINET_TABS.map(([id, label, icon]) => (
+              <button key={id} className="mhome-item" onClick={() => onMobileSection(id)}>
+                <span className="mhome-icon"><CabinetIcon name={icon} /></span>
+                <span className="mhome-copy">
+                  <span className="mhome-title">{t(label)}</span>
+                  <span className="mhome-hint">{hints[id]}</span>
+                </span>
+                {id === 'devices' && devices.length > 0 && (
+                  <span className="mhome-badge">{devices.length}</span>
+                )}
+                <span className="mhome-chevron" aria-hidden="true">›</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="cabinet">
+    <div className={`cabinet${isMobile ? ' cabinet-mobile-section' : ''}`}>
       <aside className="cabinet-side">
         <div className="cabinet-user">
           <span className="cabinet-avatar">{initial}</span>
@@ -847,6 +931,7 @@ function Cabinet({
               t={t}
               primaryLabel={t('routingSave')}
               onSaved={onRoutingSaved}
+              showHeading={false}
             />
           </section>
         )}
@@ -916,7 +1001,7 @@ function Cabinet({
   );
 }
 
-function RoutingPanel({ t, disabled = false, primaryLabel, onSaved }) {
+function RoutingPanel({ t, disabled = false, primaryLabel, onSaved, showHeading = true }) {
   const [presets, setPresets] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [mode, setMode] = useState('global');
@@ -981,8 +1066,12 @@ function RoutingPanel({ t, disabled = false, primaryLabel, onSaved }) {
 
   return (
     <div className="routing">
-      <h2 className="subhead">{t('routingTitle')}</h2>
-      <p className="note" style={{ marginTop: 0 }}>{t('routingLead')}</p>
+      {showHeading && (
+        <>
+          <h2 className="subhead">{t('routingTitle')}</h2>
+          <p className="note" style={{ marginTop: 0 }}>{t('routingLead')}</p>
+        </>
+      )}
 
       {disabled && <p className="note routing-na">{t('routingNotApplied')}</p>}
 
