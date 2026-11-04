@@ -131,7 +131,7 @@ export const STRINGS = {
     cancel: 'Отмена',
     appQrOpen: 'Войти по QR',
     appQrTitle: 'Вход в приложении по QR',
-    appQrLead: 'Откройте приложение Dogma на телефоне и отсканируйте код. Затем подтвердите устройство здесь.',
+    appQrLead: 'Откройте приложение Dogma Web на телефоне и отсканируйте код. Затем подтвердите устройство здесь.',
     appQrLoading: 'Создаём код…',
     appQrScanHint: 'Наведите камеру приложения на QR-код',
     appQrManual: 'Или введите код вручную',
@@ -158,7 +158,7 @@ export const STRINGS = {
     appQrConfirmError: 'Не удалось подтвердить вход. Попробуйте ещё раз.',
     appCardKicker: 'Dogma Web',
     appCardTitle: 'Войти в приложении без пароля',
-    appCardLead: 'Откройте приложение Dogma, отсканируйте QR с этого экрана и подтвердите устройство. Ссылку на клиент можно взять на странице загрузки.',
+    appCardLead: 'Откройте приложение Dogma Web, отсканируйте QR с этого экрана и подтвердите устройство. Ссылку на клиент можно взять на странице загрузки.',
 
     // Шапка и страница скачивания клиентов
     navLabel: 'Навигация',
@@ -199,7 +199,7 @@ export const STRINGS = {
     cabinetInstructionLead: 'Если вы используете sing-box, Hiddify, Happ или WireGuard — подключите подписку вручную по шагам ниже.',
     downloadNav: 'Скачать',
     downloadPortal: 'В личный кабинет',
-    downloadEyebrow: 'Клиенты Dogma',
+    downloadEyebrow: 'Клиенты Dogma Web',
     downloadTitle: 'Dogma Web на Android и Windows',
     downloadLead: 'Один аккаунт и одна подписка на Android и Windows. Вход в приложение — по QR с сайта, без ввода пароля.',
     downloadVersion: 'Версия',
@@ -347,7 +347,7 @@ export const STRINGS = {
     cancel: 'Cancel',
     appQrOpen: 'Sign in by QR',
     appQrTitle: 'Sign in to the app by QR',
-    appQrLead: 'Open the Dogma app on your phone and scan the code. Then confirm the device here.',
+    appQrLead: 'Open the Dogma Web app on your phone and scan the code. Then confirm the device here.',
     appQrLoading: 'Creating code…',
     appQrScanHint: 'Point the app camera at the QR code',
     appQrManual: 'Or enter the code manually',
@@ -374,7 +374,7 @@ export const STRINGS = {
     appQrConfirmError: 'Could not confirm sign-in. Try again.',
     appCardKicker: 'Dogma client',
     appCardTitle: 'Sign in to the app without a password',
-    appCardLead: 'Open the Dogma app, scan the QR on this screen and confirm the device. The client download is on the downloads page.',
+    appCardLead: 'Open the Dogma Web app, scan the QR on this screen and confirm the device. The client download is on the downloads page.',
 
     // Header and client downloads page
     navLabel: 'Navigation',
