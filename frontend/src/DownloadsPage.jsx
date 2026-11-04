@@ -116,7 +116,6 @@ export default function DownloadsPage() {
         <div className="topbar-right">
           <nav className="topbar-nav" aria-label={t('navLabel')}>
             <a className="topbar-link" href="/">{t('cabinetNav')}</a>
-            <a className="topbar-link is-current" href="/download" aria-current="page">{t('downloadNav')}</a>
           </nav>
           <div className="lang" role="group" aria-label="Language">
             <button className={lang === 'ru' ? 'on' : ''} onClick={() => setLang('ru')}>РУ</button>

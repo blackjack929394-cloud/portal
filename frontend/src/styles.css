@@ -1346,7 +1346,6 @@ ol.steps .step-n {
 }
 
 .cabinet-hero {
-  grid-column: span 8;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -1356,10 +1355,21 @@ ol.steps .step-n {
   border: 1px solid var(--line);
   border-radius: 18px;
 }
+.cabinet-hero-overview {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.9fr);
+  gap: 24px;
+  align-items: stretch;
+}
+.cabinet-hero-main,
+.cabinet-hero-side { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.cabinet-hero-side .cabinet-hero-foot { margin-top: auto; }
+.cabinet-title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
 .cabinet-app { grid-column: span 4; }
-.cabinet-routing { grid-column: span 6; }
-.cabinet-devices { grid-column: span 6; }
+.cabinet-routing { grid-column: span 4; }
+.cabinet-devices { grid-column: span 4; }
 .cabinet-qr-card { grid-column: span 4; }
 .cabinet-app,
 .cabinet-routing,
@@ -1374,6 +1384,26 @@ ol.steps .step-n {
   font-weight: 500;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+
+.cabinet-download {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 24px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.cabinet-download > div { flex: 1; min-width: 0; }
+.cabinet-download .cabinet-card-title { margin: 0 0 4px; }
+.cabinet-download .cabinet-download-btn {
+  width: auto;
+  flex: none;
+  margin: 0;
+  padding: 0 22px;
 }
 .cabinet-hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .cabinet-kicker { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
@@ -1465,17 +1495,21 @@ ol.steps .step-n {
 
 @media (max-width: 1080px) {
   .cabinet { grid-template-columns: 232px minmax(0, 1fr); gap: 16px; }
-  .cabinet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cabinet-hero { grid-column: 1 / -1; }
-  .cabinet-app,
-  .cabinet-routing,
-  .cabinet-devices,
-  .cabinet-qr-card { grid-column: span 1; }
+  .cabinet-hero-overview { grid-template-columns: minmax(0, 1fr); }
   .cabinet-side-col { display: grid; grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 820px) {
   .cabinet { grid-template-columns: minmax(0, 1fr); }
+  .cabinet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cabinet-hero,
+  .cabinet-hero-overview { grid-column: 1 / -1; }
+  .cabinet-app,
+  .cabinet-routing,
+  .cabinet-qr-card { grid-column: span 1; }
+  .cabinet-devices { grid-column: 1 / -1; }
+  .cabinet-download { flex-direction: column; align-items: flex-start; }
+  .cabinet-download .cabinet-download-btn { width: 100%; }
   .cabinet-side { position: static; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px; }
   .cabinet-side .cabinet-user { flex: 1 1 200px; }
   .cabinet-nav { flex-direction: row; flex-wrap: wrap; flex: 1 1 100%; }

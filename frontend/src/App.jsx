@@ -369,7 +369,6 @@ export default function App() {
           <div className="topbar-right">
             <nav className="topbar-nav" aria-label={t('navLabel')}>
               <a className="topbar-link is-current" href="/" aria-current="page">{t('cabinetNav')}</a>
-              <a className="topbar-link" href="/download">{t('downloadNav')}</a>
             </nav>
             {logoutButton}
             {langSwitch}
@@ -838,48 +837,54 @@ function Cabinet({
         <header className="cabinet-head">
           <div>
             <span className="eyebrow">{t('cabinetTitle')}</span>
-            <h1 className="cabinet-title">{currentTitle}</h1>
+            <div className="cabinet-title-row">
+              <h1 className="cabinet-title">{currentTitle}</h1>
+              <span className="status"><span className="status-dot" />{t('subActive')}</span>
+            </div>
           </div>
-          <span className="status"><span className="status-dot" />{t('subActive')}</span>
         </header>
 
         {tab === 'overview' && (
           <div className="cabinet-grid">
-            <section className="cabinet-hero">
-              <div className="cabinet-hero-top">
-                <div>
-                  <span className="cabinet-kicker">{t('cabinetSubscription')}</span>
-                  <div className="cabinet-hero-status">{t('subActive')}</div>
+            <section className="cabinet-hero cabinet-hero-overview">
+              <div className="cabinet-hero-main">
+                <div className="cabinet-hero-top">
+                  <div>
+                    <span className="cabinet-kicker">{t('cabinetSubscription')}</span>
+                    <div className="cabinet-hero-status">{t('subActive')}</div>
+                  </div>
                 </div>
+
+                <dl className="cabinet-stats">
+                  <div>
+                    <dt>{t('cabinetUntil')}</dt>
+                    <dd>{expires || t('cabinetNoExpiry')}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('cabinetTraffic')}</dt>
+                    <dd>{formatTraffic(sub.trafficUsedGb, sub.trafficLimitGb, t)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('cabinetServers')}</dt>
+                    <dd>{sub.activeNodeCount ?? '—'}</dd>
+                  </div>
+                </dl>
               </div>
 
-              <dl className="cabinet-stats">
-                <div>
-                  <dt>{t('cabinetUntil')}</dt>
-                  <dd>{expires || t('cabinetNoExpiry')}</dd>
+              <div className="cabinet-hero-side">
+                <div className="keybox cabinet-keybox">
+                  <span className="field-label">{t('cabinetKey')}</span>
+                  <div className="key-row">
+                    <code className="key">{importUrl}</code>
+                    <button className="btn ghost" onClick={() => onCopy(importUrl)}>
+                      {copied ? t('copied') : t('copy')}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <dt>{t('cabinetTraffic')}</dt>
-                  <dd>{formatTraffic(sub.trafficUsedGb, sub.trafficLimitGb, t)}</dd>
-                </div>
-                <div>
-                  <dt>{t('cabinetServers')}</dt>
-                  <dd>{sub.activeNodeCount ?? '—'}</dd>
-                </div>
-              </dl>
 
-              <div className="keybox cabinet-keybox">
-                <span className="field-label">{t('cabinetKey')}</span>
-                <div className="key-row">
-                  <code className="key">{importUrl}</code>
-                  <button className="btn ghost" onClick={() => onCopy(importUrl)}>
-                    {copied ? t('copied') : t('copy')}
-                  </button>
+                <div className="cabinet-hero-foot">
+                  <button className="btn primary" onClick={() => onTab('subscription')}>{t('cabinetOpenSub')}</button>
                 </div>
-              </div>
-
-              <div className="cabinet-hero-foot">
-                <button className="btn primary" onClick={() => onTab('subscription')}>{t('cabinetOpenSub')}</button>
               </div>
             </section>
 
@@ -888,7 +893,6 @@ function Cabinet({
               <h2 className="cabinet-card-title">{t('appCardTitle')}</h2>
               <p className="cabinet-card-lead">{t('appCardLead')}</p>
               <div className="cabinet-card-actions">
-                <a className="btn ghost" href="/download">{t('downloadNav')}</a>
                 <button className="btn primary" onClick={onOpenQr}>{t('appQrOpen')}</button>
               </div>
             </section>
@@ -929,6 +933,17 @@ function Cabinet({
                   ))}
                 </ol>
               </details>
+            </section>
+
+            <section className="cabinet-download">
+              <div>
+                <span className="cabinet-kicker">Dogma Web</span>
+                <h2 className="cabinet-card-title">{t('cabinetDownloadTitle')}</h2>
+                <p className="cabinet-card-lead">{t('cabinetDownloadLead')}</p>
+              </div>
+              <a className="btn primary cabinet-download-btn" href="/download">
+                {t('cabinetDownloadBtn')}
+              </a>
             </section>
           </div>
         )}
