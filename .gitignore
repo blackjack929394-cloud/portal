@@ -15,3 +15,11 @@ android/captures/
 *.apk
 *.aab
 android/app/libs/libbox.aar
+android/keystore.properties
+android/keystore/
+
+# Windows-клиент
+windows/node_modules/
+windows/dist/
+windows/bin/*.exe
+windows/bin/*.zip

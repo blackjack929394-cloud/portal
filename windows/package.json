@@ -1,0 +1,54 @@
+{
+  "name": "dogma-web-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dogma Web — защищённое соединение для Windows",
+  "main": "src/main.js",
+  "author": "Dogma",
+  "license": "SEE LICENSE IN EULA.md",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis",
+    "fetch:singbox": "node scripts/fetch-sing-box.mjs"
+  },
+  "devDependencies": {
+    "electron": "^45.2.2",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "ru.dogma.web",
+    "productName": "Dogma Web",
+    "copyright": "© 2026 Dogma",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "EULA.md",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bin/sing-box.exe",
+        "to": "bin/sing-box.exe"
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "DogmaWeb-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Dogma Web"
+    }
+  }
+}
