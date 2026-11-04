@@ -22,13 +22,20 @@ const isQrPolling = (req) => {
   return path === '/auth/app/qr/status' || /^\/auth\/qr\/[^/]+$/.test(path);
 };
 
+// Статика (HTML, JS, CSS, шрифты, скачивание APK) не должна расходовать
+// лимит API: иначе обычная загрузка страницы и опрос админки съедают его.
+const isStaticRequest = (req) => {
+  const path = req.path || '';
+  return !(path.startsWith('/api/') || path.startsWith('/auth/') || path === '/health');
+};
+
 // General per-IP limit for the rest of the API.
 export const generalLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 60,
+  max: 120,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => skipInTest() || isQrPolling(req),
+  skip: (req) => skipInTest() || isQrPolling(req) || isStaticRequest(req),
 });
 
 // QR-коды одноразовые и короткоживущие, но всё равно ограничиваем перебор

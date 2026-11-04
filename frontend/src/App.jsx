@@ -316,41 +316,66 @@ export default function App() {
     && password.length >= 8;
   const loginValid = loginUsername.trim().length >= 1 && loginPassword.length >= 1;
 
+  const langSwitch = (
+    <div className="lang" role="group" aria-label="Language">
+      <button className={lang === 'ru' ? 'on' : ''} onClick={() => setLang('ru')}>РУ</button>
+      <span className="lang-sep">/</span>
+      <button className={lang === 'en' ? 'on' : ''} onClick={() => setLang('en')}>EN</button>
+    </div>
+  );
+
+  const logoutButton = auth && auth !== false ? (
+    <button className="logout-btn" onClick={onLogout} title={t('logout')}>
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+        strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9" />
+      </svg>
+      <span>{t('logout')}</span>
+    </button>
+  ) : null;
+
   return (
     <div className="page">
-      <header className="topbar">
-        {isMobile && auth && auth !== false && phase === 'ready' && mobileSection && (
-          <button className="topbar-back" onClick={() => setMobileSection(null)}>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-              strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M15 5 8 12l7 7" />
-            </svg>
-            <span>{t('cabinetBack')}</span>
-          </button>
-        )}
-        <div className="brand">
-          <DogmaLogo />
-          <span className="brand-tag">{t('brandTag')}</span>
-        </div>
-        <div className="topbar-right">
-          <nav className="topbar-nav" aria-label={t('navLabel')}>
-            {!(isMobile && mobileSection) && (
-              <a className="topbar-link is-current" href="/" aria-current="page">{t('cabinetNav')}</a>
-            )}
-            <a className="topbar-link" href="/download">{t('downloadNav')}</a>
-          </nav>
-          {auth && auth !== false && (
-            <button className="user-chip" onClick={onLogout} title={t('logout')}>
-              <span className="user-name">{auth.name} · </span>{t('logout')}
-            </button>
+      {isMobile ? (
+        <header className="topbar topbar-mobile">
+          {mobileSection && auth && auth !== false && phase === 'ready' ? (
+            <>
+              <button className="mobile-back" onClick={() => setMobileSection(null)}>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                  strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M15 5 8 12l7 7" />
+                </svg>
+                <span>{t('cabinetBack')}</span>
+              </button>
+              <DogmaLogo />
+              {logoutButton}
+            </>
+          ) : (
+            <>
+              <div className="brand"><DogmaLogo /></div>
+              <div className="mobile-head-actions">
+                {langSwitch}
+                {logoutButton}
+              </div>
+            </>
           )}
-          <div className="lang" role="group" aria-label="Language">
-            <button className={lang === 'ru' ? 'on' : ''} onClick={() => setLang('ru')}>РУ</button>
-            <span className="lang-sep">/</span>
-            <button className={lang === 'en' ? 'on' : ''} onClick={() => setLang('en')}>EN</button>
+        </header>
+      ) : (
+        <header className="topbar">
+          <div className="brand">
+            <DogmaLogo />
+            <span className="brand-tag">{t('brandTag')}</span>
           </div>
-        </div>
-      </header>
+          <div className="topbar-right">
+            <nav className="topbar-nav" aria-label={t('navLabel')}>
+              <a className="topbar-link is-current" href="/" aria-current="page">{t('cabinetNav')}</a>
+              <a className="topbar-link" href="/download">{t('downloadNav')}</a>
+            </nav>
+            {logoutButton}
+            {langSwitch}
+          </div>
+        </header>
+      )}
 
       <main className={`stage${auth && auth !== false && phase === 'ready' && sub ? ' stage-cabinet' : ''}`}>
         {auth === null && (
@@ -666,6 +691,13 @@ const CABINET_ICONS = {
       <path d="M20 4.5h-4a3 3 0 0 0-3 3v12a2.5 2.5 0 0 1 2.5-2.5H20z" />
     </>
   ),
+  download: (
+    <>
+      <path d="M12 3v12" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M5 21h14" />
+    </>
+  ),
 };
 
 function CabinetIcon({ name }) {
@@ -753,6 +785,14 @@ function Cabinet({
                 <span className="mhome-chevron" aria-hidden="true">›</span>
               </button>
             ))}
+            <a className="mhome-item" href="/download">
+              <span className="mhome-icon"><CabinetIcon name="download" /></span>
+              <span className="mhome-copy">
+                <span className="mhome-title">{t('downloadNav')}</span>
+                <span className="mhome-hint">{t('mhomeDownloadHint')}</span>
+              </span>
+              <span className="mhome-chevron" aria-hidden="true">›</span>
+            </a>
           </nav>
         </div>
       </div>
